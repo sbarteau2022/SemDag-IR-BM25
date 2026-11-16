@@ -1,0 +1,630 @@
+Fix the issue. The code spans are the only repository text available. Reply with a unified diff and no other text.
+
+## Issue
+fix split cells
+
+Fixed `Segment._split_cells` issue discovered in https://github.com/Textualize/textual/issues/4996
+
+## Code
+### rich.palette.ColorBox.__rich_console__
+def __rich_console__(
+            self, console: Console, options: ConsoleOptions
+        ) -> Iterable[Segment]:
+            height = console.size.height - 3
+            for y in range(0, height):
+                for x in range(options.max_width):
+                    h = x / options.max_width
+                    l = y / (height + 1)
+                    r1, g1, b1 = colorsys.hls_to_rgb(h, l, 1.0)
+                    r2, g2, b2 = colorsys.hls_to_rgb(h, l + (1 / height / 2), 1.0)
+                    bgcolor = Color.from_rgb(r1 * 255, g1 * 255, b1 * 255)
+                    color = Color.from_rgb(r2 * 255, g2 * 255, b2 * 255)
+                    yield Segment("▄", Style(color=color, bgcolor=bgcolor))
+                yield Segment.line()
+
+### rich.table.Table.__rich_console__
+def __rich_console__(
+        self, console: "Console", options: "ConsoleOptions"
+    ) -> "RenderResult":
+        if not self.columns:
+            yield Segment("\n")
+            return
+
+        max_width = options.max_width
+        if self.width is not None:
+            max_width = self.width
+
+        extra_width = self._extra_width
+        widths = self._calculate_column_widths(
+            console, options.update_width(max_width - extra_width)
+        )
+        table_width = sum(widths) + extra_width
+
+        render_options = options.update(
+            width=table_width, highlight=self.highlight, height=None
+        )
+
+        def render_annotation(
+            text: TextType, style: StyleType, justify: "JustifyMethod" = "center"
+        ) -> "RenderResult":
+            render_text = (
+                console.render_str(text, style=style, highlight=False)
+                if isinstance(text, str)
+                else text
+            )
+            return console.render(
+                render_text, options=render_options.update(justify=justify)
+            )
+
+        if self.title:
+            yield from render_annotation(
+                self.title,
+                style=Style.pick_first(self.title_style, "table.title"),
+                justify=self.title_justify,
+            )
+        yield from self._render(console, render_options, widths)
+        if self.caption:
+            yield from render_annotation(
+                self.caption,
+                style=Style.pick_first(self.caption_style, "table.caption"),
+                justify=self.caption_justify,
+            )
+
+### rich.console.NewLine.__rich_console__
+def __rich_console__(
+        self, console: "Console", options: "ConsoleOptions"
+    ) -> Iterable[Segment]:
+        yield Segment("\n" * self.count)
+
+### rich.console.Console.render_lines
+def render_lines(
+        self,
+        renderable: RenderableType,
+        options: Optional[ConsoleOptions] = None,
+        *,
+        style: Optional[Style] = None,
+        pad: bool = True,
+        new_lines: bool = False,
+    ) -> List[List[Segment]]:
+        """Render objects in to a list of lines.
+
+        The output of render_lines is useful when further formatting of rendered console text
+        is required, such as the Panel class which draws a border around any renderable object.
+
+        Args:
+            renderable (RenderableType): Any object renderable in the console.
+            options (Optional[ConsoleOptions], optional): Console options, or None to use self.options. Default to ``None``.
+            style (Style, optional): Optional style to apply to renderables. Defaults to ``None``.
+            pad (bool, optional): Pad lines shorter than render width. Defaults to ``True``.
+            new_lines (bool, optional): Include "\n" characters at end of lines.
+
+        Returns:
+            List[List[Segment]]: A list of lines, where a line is a list of Segment objects.
+        """
+        with self._lock:
+            render_options = options or self.options
+            _rendered = self.render(renderable, render_options)
+            if style:
+                _rendered = Segment.apply_style(_rendered, style)
+
+            render_height = render_options.height
+            if render_height is not None:
+                render_height = max(0, render_height)
+
+            lines = list(
+                islice(
+                    Segment.split_and_crop_lines(
+                        _rendered,
+                        render_options.max_width,
+                        include_new_lines=new_lines,
+                        pad=pad,
+                        style=style,
+                    ),
+                    None,
+                    render_height,
+                )
+            )
+            if render_options.height is not None:
+                extra_lines = render_options.height - len(lines)
+                if extra_lines > 0:
+                    pad_line = [
+                        (
+                            [
+                                Segment(" " * render_options.max_width, style),
+                                Segment("\n"),
+                            ]
+                            if new_lines
+                            else [Segment(" " * render_options.max_width, style)]
+                        )
+                    ]
+                    lines.extend(pad_line * extra_lines)
+
+            return lines
+
+### rich.emoji.Emoji.__rich_console__
+def __rich_console__(
+        self, console: "Console", options: "ConsoleOptions"
+    ) -> "RenderResult":
+        yield Segment(self._char, console.get_style(self.style))
+
+### rich.__main__.ColorBox.__rich_console__
+def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        for y in range(0, 5):
+            for x in range(options.max_width):
+                h = x / options.max_width
+                l = 0.1 + ((y / 5) * 0.7)
+                r1, g1, b1 = colorsys.hls_to_rgb(h, l, 1.0)
+                r2, g2, b2 = colorsys.hls_to_rgb(h, l + 0.7 / 10, 1.0)
+                bgcolor = Color.from_rgb(r1 * 255, g1 * 255, b1 * 255)
+                color = Color.from_rgb(r2 * 255, g2 * 255, b2 * 255)
+                yield Segment("▄", Style(color=color, bgcolor=bgcolor))
+            yield Segment.line()
+
+### rich.control.Control.__init__
+def __init__(self, *codes: Union[ControlType, ControlCode]) -> None:
+        control_codes: List[ControlCode] = [
+            (code,) if isinstance(code, ControlType) else code for code in codes
+        ]
+        _format_map = CONTROL_CODES_FORMAT
+        rendered_codes = "".join(
+            _format_map[code](*parameters) for code, *parameters in control_codes
+        )
+        self.segment = Segment(rendered_codes, None, control_codes)
+
+### rich.progress_bar.ProgressBar._get_pulse_segments
+def _get_pulse_segments(
+        self,
+        fore_style: Style,
+        back_style: Style,
+        color_system: str,
+        no_color: bool,
+        ascii: bool = False,
+    ) -> List[Segment]:
+        """Get a list of segments to render a pulse animation.
+
+        Returns:
+            List[Segment]: A list of segments, one segment per character.
+        """
+        bar = "-" if ascii else "━"
+        segments: List[Segment] = []
+        if color_system not in ("standard", "eight_bit", "truecolor") or no_color:
+            segments += [Segment(bar, fore_style)] * (PULSE_SIZE // 2)
+            segments += [Segment(" " if no_color else bar, back_style)] * (
+                PULSE_SIZE - (PULSE_SIZE // 2)
+            )
+            return segments
+
+        append = segments.append
+        fore_color = (
+            fore_style.color.get_truecolor()
+            if fore_style.color
+            else ColorTriplet(255, 0, 255)
+        )
+        back_color = (
+            back_style.color.get_truecolor()
+            if back_style.color
+            else ColorTriplet(0, 0, 0)
+        )
+        cos = math.cos
+        pi = math.pi
+        _Segment = Segment
+        _Style = Style
+        from_triplet = Color.from_triplet
+
+        for index in range(PULSE_SIZE):
+            position = index / PULSE_SIZE
+            fade = 0.5 + cos(position * pi * 2) / 2.0
+            color = blend_rgb(fore_color, back_color, cross_fade=fade)
+            append(_Segment(bar, _Style(color=from_triplet(color))))
+        return segments
+
+### rich.bar.Bar.__rich_console__
+def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        width = min(
+            self.width if self.width is not None else options.max_width,
+            options.max_width,
+        )
+
+        if self.begin >= self.end:
+            yield Segment(" " * width, self.style)
+            yield Segment.line()
+            return
+
+        prefix_complete_eights = int(width * 8 * self.begin / self.size)
+        prefix_bar_count = prefix_complete_eights // 8
+        prefix_eights_count = prefix_complete_eights % 8
+
+        body_complete_eights = int(width * 8 * self.end / self.size)
+        body_bar_count = body_complete_eights // 8
+        body_eights_count = body_complete_eights % 8
+
+        # When start and end fall into the same cell, we ideally should render
+        # a symbol that's "center-aligned", but there is no good symbol in Unicode.
+        # In this case, we fall back to right-aligned block symbol for simplicity.
+
+        prefix = " " * prefix_bar_count
+        if prefix_eights_count:
+            prefix += BEGIN_BLOCK_ELEMENTS[prefix_eights_count]
+
+        body = FULL_BLOCK * body_bar_count
+        if body_eights_count:
+            body += END_BLOCK_ELEMENTS[body_eights_count]
+
+        suffix = " " * (width - len(body))
+
+        yield Segment(prefix + body[len(prefix) :] + suffix, self.style)
+        yield Segment.line()
+
+### rich.text.Text.render
+def render(self, console: "Console", end: str = "") -> Iterable["Segment"]:
+        """Render the text as Segments.
+
+        Args:
+            console (Console): Console instance.
+            end (Optional[str], optional): Optional end character.
+
+        Returns:
+            Iterable[Segment]: Result of render that may be written to the console.
+        """
+        _Segment = Segment
+        text = self.plain
+        if not self._spans:
+            yield Segment(text)
+            if end:
+                yield _Segment(end)
+            return
+        get_style = partial(console.get_style, default=Style.null())
+
+        enumerated_spans = list(enumerate(self._spans, 1))
+        style_map = {index: get_style(span.style) for index, span in enumerated_spans}
+        style_map[0] = get_style(self.style)
+
+        spans = [
+            (0, False, 0),
+            *((span.start, False, index) for index, span in enumerated_spans),
+            *((span.end, True, index) for index, span in enumerated_spans),
+            (len(text), True, 0),
+        ]
+        spans.sort(key=itemgetter(0, 1))
+
+        stack: List[int] = []
+        stack_append = stack.append
+        stack_pop = stack.remove
+
+        style_cache: Dict[Tuple[Style, ...], Style] = {}
+        style_cache_get = style_cache.get
+        combine = Style.combine
+
+        def get_current_style() -> Style:
+            """Construct current style from stack."""
+            styles = tuple(style_map[_style_id] for _style_id in sorted(stack))
+            cached_style = style_cache_get(styles)
+            if cached_style is not None:
+                return cached_style
+            current_style = combine(styles)
+            style_cache[styles] = current_style
+            return current_style
+
+        for (offset, leaving, style_id), (next_offset, _, _) in zip(spans, spans[1:]):
+            if leaving:
+                stack_pop(style_id)
+            else:
+                stack_append(style_id)
+            if next_offset > offset:
+                yield _Segment(text[offset:next_offset], get_current_style())
+        if end:
+            yield _Segment(end)
+
+### rich.align.Align.__rich_console__
+def __rich_console__(
+        self, console: "Console", options: "ConsoleOptions"
+    ) -> "RenderResult":
+        align = self.align
+        width = console.measure(self.renderable, options=options).maximum
+        rendered = console.render(
+            Constrain(
+                self.renderable, width if self.width is None else min(width, self.width)
+            ),
+            options.update(height=None),
+        )
+        lines = list(Segment.split_lines(rendered))
+        width, height = Segment.get_shape(lines)
+        lines = Segment.set_shape(lines, width, height)
+        new_line = Segment.line()
+        excess_space = options.max_width - width
+        style = console.get_style(self.style) if self.style is not None else None
+
+        def generate_segments() -> Iterable[Segment]:
+            if excess_space <= 0:
+                # Exact fit
+                for line in lines:
+                    yield from line
+                    yield new_line
+
+            elif align == "left":
+                # Pad on the right
+                pad = Segment(" " * excess_space, style) if self.pad else None
+                for line in lines:
+                    yield from line
+                    if pad:
+                        yield pad
+                    yield new_line
+
+            elif align == "center":
+                # Pad left and right
+                left = excess_space // 2
+                pad = Segment(" " * left, style)
+                pad_right = (
+                    Segment(" " * (excess_space - left), style) if self.pad else None
+                )
+                for line in lines:
+                    if left:
+                        yield pad
+                    yield from line
+                    if pad_right:
+                        yield pad_right
+                    yield new_line
+
+            elif align == "right":
+                # Padding on left
+                pad = Segment(" " * excess_space, style)
+                for line in lines:
+                    yield pad
+                    yield from line
+                    yield new_line
+
+        blank_line = (
+            Segment(f"{' ' * (self.width or options.max_width)}\n", style)
+            if self.pad
+            else Segment("\n")
+        )
+
+        def blank_lines(count: int) -> Iterable[Segment]:
+            if count > 0:
+                for _ in range(count):
+                    yield blank_line
+
+        vertical_height = self.height or options.height
+        iter_segments: Iterable[Segment]
+        if self.vertical and vertical_height is not None:
+            if self.vertical == "top":
+                bottom_space = vertical_height - height
+                iter_segments = chain(generate_segments(), blank_lines(bottom_space))
+            elif self.vertical == "middle":
+                top_space = (vertical_height - height) // 2
+                bottom_space = vertical_height - top_space - height
+                iter_segments = chain(
+                    blank_lines(top_space),
+                    generate_segments(),
+                    blank_lines(bottom_space),
+                )
+            else:  #  self.vertical == "bottom":
+                top_space = vertical_height - height
+                iter_segments = chain(blank_lines(top_space), generate_segments())
+        else:
+            iter_segments = generate_segments()
+        if self.style:
+            style = console.get_style(self.style)
+            iter_segments = Segment.apply_style(iter_segments, style)
+        yield from iter_segments
+
+### rich.align.Align.generate_segments
+def generate_segments() -> Iterable[Segment]:
+            if excess_space <= 0:
+                # Exact fit
+                for line in lines:
+                    yield from line
+                    yield new_line
+
+            elif align == "left":
+                # Pad on the right
+                pad = Segment(" " * excess_space, style) if self.pad else None
+                for line in lines:
+                    yield from line
+                    if pad:
+                        yield pad
+                    yield new_line
+
+            elif align == "center":
+                # Pad left and right
+                left = excess_space // 2
+                pad = Segment(" " * left, style)
+                pad_right = (
+                    Segment(" " * (excess_space - left), style) if self.pad else None
+                )
+                for line in lines:
+                    if left:
+                        yield pad
+                    yield from line
+                    if pad_right:
+                        yield pad_right
+                    yield new_line
+
+            elif align == "right":
+                # Padding on left
+                pad = Segment(" " * excess_space, style)
+                for line in lines:
+                    yield pad
+                    yield from line
+                    yield new_line
+
+### rich.align.VerticalCenter.__rich_console__
+def __rich_console__(
+        self, console: "Console", options: "ConsoleOptions"
+    ) -> "RenderResult":
+        style = console.get_style(self.style) if self.style is not None else None
+        lines = console.render_lines(
+            self.renderable, options.update(height=None), pad=False
+        )
+        width, _height = Segment.get_shape(lines)
+        new_line = Segment.line()
+        height = options.height or options.size.height
+        top_space = (height - len(lines)) // 2
+        bottom_space = height - top_space - len(lines)
+        blank_line = Segment(f"{' ' * width}", style)
+
+        def blank_lines(count: int) -> Iterable[Segment]:
+            for _ in range(count):
+                yield blank_line
+                yield new_line
+
+        if top_space > 0:
+            yield from blank_lines(top_space)
+        for line in lines:
+            yield from line
+            yield new_line
+        if bottom_space > 0:
+            yield from blank_lines(bottom_space)
+
+### rich.panel.Panel.__rich_console__
+def __rich_console__(
+        self, console: "Console", options: "ConsoleOptions"
+    ) -> "RenderResult":
+        _padding = Padding.unpack(self.padding)
+        renderable = (
+            Padding(self.renderable, _padding) if any(_padding) else self.renderable
+        )
+        style = console.get_style(self.style)
+        partial_border_style = console.get_style(self.border_style)
+        border_style = style + partial_border_style
+        width = (
+            options.max_width
+            if self.width is None
+            else min(options.max_width, self.width)
+        )
+
+        safe_box: bool = console.safe_box if self.safe_box is None else self.safe_box
+        box = self.box.substitute(options, safe=safe_box)
+
+        def align_text(
+            text: Text, width: int, align: str, character: str, style: Style
+        ) -> Text:
+            """Gets new aligned text.
+
+            Args:
+                text (Text): Title or subtitle text.
+                width (int): Desired width.
+                align (str): Alignment.
+                character (str): Character for alignment.
+                style (Style): Border style
+
+            Returns:
+                Text: New text instance
+            """
+            text = text.copy()
+            text.truncate(width)
+            excess_space = width - cell_len(text.plain)
+            if excess_space:
+                if align == "left":
+                    return Text.assemble(
+                        text,
+                        (character * excess_space, style),
+                        no_wrap=True,
+                        end="",
+                    )
+                elif align == "center":
+                    left = excess_space // 2
+                    return Text.assemble(
+                        (character * left, style),
+                        text,
+                        (character * (excess_space - left), style),
+                        no_wrap=True,
+                        end="",
+                    )
+                else:
+                    return Text.assemble(
+                        (character * excess_space, style),
+                        text,
+                        no_wrap=True,
+                        end="",
+                    )
+            return text
+
+        title_text = self._title
+        if title_text is not None:
+            title_text.stylize_before(partial_border_style)
+
+        child_width = (
+            width - 2
+            if self.expand
+            else console.measure(
+                renderable, options=options.update_width(width - 2)
+            ).maximum
+        )
+        child_height = self.height or options.height or None
+        if child_height:
+            child_height -= 2
+        if title_text is not None:
+            child_width = min(
+                options.max_width - 2, max(child_width, title_text.cell_len + 2)
+            )
+
+        width = child_width + 2
+        child_options = options.update(
+            width=child_width, height=child_height, highlight=self.highlight
+        )
+        lines = console.render_lines(renderable, child_options, style=style)
+
+        line_start = Segment(box.mid_left, border_style)
+        line_end = Segment(f"{box.mid_right}", border_style)
+        new_line = Segment.line()
+        if title_text is None or width <= 4:
+            yield Segment(box.get_top([width - 2]), border_style)
+        else:
+            title_text = align_text(
+                title_text,
+                width - 4,
+                self.title_align,
+                box.top,
+                border_style,
+            )
+            yield Segment(box.top_left + box.top, border_style)
+            yield from console.render(title_text, child_options.update_width(width - 4))
+            yield Segment(box.top + box.top_right, border_style)
+
+        yield new_line
+        for line in lines:
+            yield line_start
+            yield from line
+            yield line_end
+            yield new_line
+
+        subtitle_text = self._subtitle
+        if subtitle_text is not None:
+            subtitle_text.stylize_before(partial_border_style)
+
+        if subtitle_text is None or width <= 4:
+            yield Segment(box.get_bottom([width - 2]), border_style)
+        else:
+            subtitle_text = align_text(
+                subtitle_text,
+                width - 4,
+                self.subtitle_align,
+                box.bottom,
+                border_style,
+            )
+            yield Segment(box.bottom_left + box.bottom, border_style)
+            yield from console.render(
+                subtitle_text, child_options.update_width(width - 4)
+            )
+            yield Segment(box.bottom + box.bottom_right, border_style)
+
+        yield new_line
+
+### rich.markdown.BlockQuote.__rich_console__
+def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        render_options = options.update(width=options.max_width - 4)
+        lines = console.render_lines(self.elements, render_options, style=self.style)
+        style = self.style
+        new_line = Segment("\n")
+        padding = Segment("▌ ", style)
+        for line in lines:
+            yield padding
+            yield from line
+            yield new_line

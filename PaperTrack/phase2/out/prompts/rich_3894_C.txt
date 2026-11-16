@@ -1,0 +1,278 @@
+Fix the issue. The code spans are the only repository text available. Reply with a unified diff and no other text.
+
+## Issue
+Handle unusual __qualname__ in inspect
+
+<!--
+Please note that Rich isn't accepting any new features at this point.
+
+If a feature can be implemented without modifying the core library, then
+they should be released as a third-party module. I can accept updates to the
+core library that make it easier to extend (think hooks).
+
+Bugfixes are always welcome of course.
+
+Sometimes it is not clear what is a feature and what is a bug fix.
+If there is any doubt, please open a discussion first.
+
+-->
+
+<!--
+*Are you contributing typo fixes?*
+
+If your PR solely consists of typos, at least one must be in the docs to warrant an addition to CONTRIBUTORS.md
+-->
+
+## Type of changes
+
+- [x] Bug fix
+- [ ] New feature
+- [ ] Documentation / docstrings
+- [x] Tests
+- [ ] Other
+
+## Checklist
+
+- [x] I've run the latest [black](https://github.com/psf/black) with default args on new code.
+- [x] I've updated CHANGELOG.md and CONTRIBUTORS.md where appropriate (see note about typos above).
+- [x] I've added tests for new code.
+- [x] I accept that @willmcgugan may be pedantic in the code review.
+
+## Description
+
+I discovered, that an object with an unusual `__qualname__` attribute (not a `str`, e.g. a descriptor) causes `inspect` to fail.
+This can happen if an object is created this way intentionally, but I discovered it, when decorating a class with `@functools.lru_cache` which forwards the underlying attributes using a descriptor when it can't add the to it's `__dict__` because the class uses `__slots__`:
+
+```python
+from functools import lru_cache
+from rich import inspect
+
+
+@lru_cache
+class Klaas:
+    __slots__ = ("__qualname__",)
+
+
+if __name__ == "__main__":
+    from rich.traceback import install
+
+    install()
+
+    inspect(Klaas.__qualname__)
+    inspect(Klaas, all=True)
+```
+
+I fixed it by checking the type of `__qualname__` falling back to `__name__` and if that isn't a `str` using the already provided fallback.
+
+
+## Code
+### rich.containers.Lines
+class Lines:
+    """A list subclass which can render to the console."""
+
+    def __init__(self, lines: Iterable['Text']=()) -> None:
+        ...
+
+    def __repr__(self) -> str:
+        ...
+
+    def __iter__(self) -> Iterator['Text']:
+        ...
+
+    @overload
+    def __getitem__(self, index: int) -> 'Text':
+        ...
+
+    @overload
+    def __getitem__(self, index: slice) -> List['Text']:
+        ...
+
+    def __getitem__(self, index: Union[slice, int]) -> Union['Text', List['Text']]:
+        ...
+
+    def __setitem__(self, index: int, value: 'Text') -> 'Lines':
+        ...
+
+    def __len__(self) -> int:
+        ...
+
+    def __rich_console__(self, console: 'Console', options: 'ConsoleOptions') -> 'RenderResult':
+        ...
+
+    def append(self, line: 'Text') -> None:
+        ...
+
+    def extend(self, lines: Iterable['Text']) -> None:
+        ...
+
+    def pop(self, index: int=-1) -> 'Text':
+        ...
+
+    def justify(self, console: 'Console', width: int, justify: 'JustifyMethod'='left', overflow: 'OverflowMethod'='fold') -> None:
+        ...
+
+### rich.text.Span
+class Span(NamedTuple):
+    """A marked up region in some text."""
+
+    def __repr__(self) -> str:
+        ...
+
+    def __bool__(self) -> bool:
+        ...
+
+    def split(self, offset: int) -> Tuple['Span', Optional['Span']]:
+        ...
+
+    def move(self, offset: int) -> 'Span':
+        ...
+
+    def right_crop(self, offset: int) -> 'Span':
+        ...
+
+    def extend(self, cells: int) -> 'Span':
+        ...
+
+### rich.get_console
+def get_console() -> "Console":
+    """Get a global :class:`~rich.console.Console` instance. This function is used when Rich requires a Console,
+    and hasn't been explicitly given one.
+
+    Returns:
+        Console: A console instance.
+    """
+    global _console
+    if _console is None:
+        from .console import Console
+
+        _console = Console()
+
+    return _console
+
+### rich._inspect.Inspect
+class Inspect(JupyterMixin):
+    """A renderable to inspect any Python Object.
+
+Args:
+    obj (Any): An object to inspect.
+    title (str, optional): Title to display over inspect result, or None use type. Defaults to None.
+    help (bool, optional): Show full help text rather than just first paragraph. Defaults to False.
+    methods (bool, optional): Enable inspection of callables. Defaults to False.
+    docs (bool, optional): Also render doc strings. Defaults to True.
+    private (bool, optional): Show private attributes (beginning with underscore). Defaults to False.
+    dunder (bool, optional): Show attributes starting with double underscore. Defaults to False.
+    sort (bool, optional): Sort attributes alphabetically. Defaults to True.
+    all (bool, optional): Show all attributes. Defaults to False.
+    value (bool, optional): Pretty print value of object. Defaults to True."""
+
+    def __init__(self, obj: Any, *, title: Optional[TextType]=None, help: bool=False, methods: bool=False, docs: bool=True, private: bool=False, dunder: bool=False, sort: bool=True, all: bool=True, value: bool=True) -> None:
+        ...
+
+    def _make_title(self, obj: Any) -> Text:
+        ...
+
+    def __rich__(self) -> Panel:
+        ...
+
+    def _get_signature(self, name: str, obj: Any) -> Optional[Text]:
+        ...
+
+    def _render(self) -> Iterable[RenderableType]:
+        ...
+
+    def _get_formatted_doc(self, object_: Any) -> Optional[str]:
+        ...
+
+### rich.diagnose.report
+def report() -> None:  # pragma: no cover
+    """Print a report to the terminal with debugging information"""
+    console = Console()
+    inspect(console)
+    features = get_windows_console_features()
+    inspect(features)
+
+    env_names = (
+        "CLICOLOR",
+        "COLORTERM",
+        "COLUMNS",
+        "JPY_PARENT_PID",
+        "JUPYTER_COLUMNS",
+        "JUPYTER_LINES",
+        "LINES",
+        "NO_COLOR",
+        "TERM_PROGRAM",
+        "TERM",
+        "TTY_COMPATIBLE",
+        "TTY_INTERACTIVE",
+        "VSCODE_VERBOSE_LOGGING",
+    )
+    env = {name: os.getenv(name) for name in env_names}
+    console.print(Panel.fit((Pretty(env)), title="[b]Environment Variables"))
+
+    console.print(f'platform="{platform.system()}"')
+
+### tests.test_inspect.render
+def render(obj, methods=False, value=False, width=50) -> str:
+    console = Console(file=io.StringIO(), width=width, legacy_windows=False)
+    inspect(obj, console=console, methods=methods, value=value)
+    return console.file.getvalue()
+
+### tests.test_inspect.test_render
+def test_render():
+    console = Console(width=100, file=io.StringIO(), legacy_windows=False)
+
+    foo = Foo("hello")
+    inspect(foo, console=console, all=True, value=False)
+    result = console.file.getvalue()
+    print(repr(result))
+    expected = "╭────────────── <class 'tests.test_inspect.Foo'> ──────────────╮\n│ Foo test                                                     │\n│                                                              │\n│   broken = InspectError()                                    │\n│ __init__ = def __init__(foo: int) -> None: constructor docs. │\n│   method = def method(a, b) -> str: Multi line               │\n╰──────────────────────────────────────────────────────────────╯\n"
+    assert result == expected
+
+### tests.test_inspect.test_inspect_swig_edge_case
+def test_inspect_swig_edge_case():
+    """Issue #1838 - Edge case with Faiss library - object with empty dir()"""
+
+    class Thing:
+        @property
+        def __class__(self):
+            raise AttributeError
+
+    thing = Thing()
+    try:
+        inspect(thing)
+    except Exception as e:
+        assert False, f"Object with no __class__ shouldn't raise {e}"
+
+### rich.pretty.RichFormatter
+class RichFormatter(BaseFormatter):
+    None
+
+    def __call__(self, value: Any) -> Any:
+        ...
+
+### rich._extension.load_ipython_extension
+def load_ipython_extension(ip: Any) -> None:  # pragma: no cover
+    # prevent circular import
+    from rich.pretty import install
+    from rich.traceback import install as tr_install
+
+    install()
+    tr_install()
+
+### tests.test_pretty.test_install
+def test_install() -> None:
+    console = Console(file=io.StringIO())
+    dh = sys.displayhook
+    install(console)
+    sys.displayhook("foo")
+    assert console.file.getvalue() == "'foo'\n"
+    assert sys.displayhook is not dh
+
+### tests.test_pretty.test_install_max_depth
+def test_install_max_depth() -> None:
+    console = Console(file=io.StringIO())
+    dh = sys.displayhook
+    install(console, max_depth=1)
+    sys.displayhook({"foo": {"bar": True}})
+    assert console.file.getvalue() == "{'foo': {...}}\n"
+    assert sys.displayhook is not dh

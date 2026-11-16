@@ -1,0 +1,47 @@
+diff --git a/src/httpx/_parsers.py b/src/httpx/_parsers.py
+index 830fccd..6c2fa6e 100644
+--- a/src/httpx/_parsers.py
++++ b/src/httpx/_parsers.py
+@@ -146,8 +146,20 @@ class HTTPParser:
+         if protocol != b'HTTP/1.1':
+             raise ProtocolError("Sent unsupported protocol version")
+         status_code_bytes = str(status_code).encode('ascii')
+-        data = b" ".join([protocol, status_code_bytes, reason]) + b"\r\n"
+-        self.stream.write(data)
++    def complete(self) -> None:
++        """
++        Completes the current request/response cycle and resets the parser state
++        for potential keep-alive reuse.
++        """
++        self.send_state = State.WAIT
++        self.recv_state = State.WAIT
++        self.send_content_length = 0
++        self.recv_content_length = 0
++        self.send_seen_length = 0
++        self.recv_seen_length = 0
++        self.processing_1xx = False
++        # Note: The stream itself is not closed here, only the parser state is reset.
++        # Stream closing is handled by the connection wrapper.
+ 
+         self.send_state = State.SEND_HEADERS
+ 
+diff --git a/src/httpx/_server.py b/src/httpx/_server.py
+index 95226d9..dca250f 100644
+--- a/src/httpx/_server.py
++++ b/src/httpx/_server.py
+@@ -49,11 +49,15 @@ class HTTPConnection:
+                     else:
+                         self._send_head(response)
+                         self._send_body(response)
++        except (KeyboardInterrupt, SystemExit):
++            logger.info("Server shutting down gracefully.")
+         except Exception:
+             logger.error("Internal Server Error", exc_info=True)
+ 
+     def close(self):
+         self._parser.close()
++        if hasattr(self._stream, 'close'):
++            self._stream.close()
+ 
+     # Receive the request...
+     def _recv_head(self) -> tuple[str, str, list[tuple[str, str]]]:

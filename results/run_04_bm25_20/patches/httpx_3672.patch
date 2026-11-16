@@ -1,0 +1,97 @@
+diff --git a/src/httpx/_parsers.py b/src/httpx/_parsers.py
+index 830fccd..bb1fdad 100644
+--- a/src/httpx/_parsers.py
++++ b/src/httpx/_parsers.py
+@@ -342,54 +342,49 @@ class HTTPParser:
+             msg = f"Called 'recv_body' in invalid state {self.recv_state}"
+             raise ProtocolError(msg)
+ 
+-        if self.recv_content_length is None:
+-            # Transfer-Encoding: chunked
+-            exc_text = 'reading chunk size'
+-            line = self.parser.read_until(b"\r\n", max_size=4096, exc_text=exc_text)
+-            sizestr, _, _ = line.partition(b";")
++        try:
++            if self.recv_content_length is None:
++                # Transfer-Encoding: chunked
++                exc_text = 'reading chunk size'
++                line = self.parser.read_until(b"\r\n", max_size=4096, exc_text=exc_text)
++                sizestr, _, _ = line.partition(b";")
++
++                exc_text = "Received invalid chunk size"
++                size = bounded_hex(sizestr, max_digits=8, exc_text=exc_text)
++                if size > 0:
++                    body = self.parser.read(size=size)
++                    exc_text = 'reading chunk data'
++                    self.parser.read_until(b"\r\n", max_size=2, exc_text=exc_text)
++                    self.recv_seen_length += len(body)
++                else:
++                    body = b''
++                    exc_text = 'reading chunk termination'
++                    self.parser.read_until(b"\r\n", max_size=2, exc_text=exc_text)
+ 
+-            exc_text = "Received invalid chunk size"
+-            size = bounded_hex(sizestr, max_digits=8, exc_text=exc_text)
+-            if size > 0:
++            else:
++                # Content-Length: xxx
++                remaining = self.recv_content_length - self.recv_seen_length
++                size = min(remaining, 4096)
+                 body = self.parser.read(size=size)
+-                exc_text = 'reading chunk data'
+-                self.parser.read_until(b"\r\n", max_size=2, exc_text=exc_text)
+                 self.recv_seen_length += len(body)
+-            else:
+-                body = b''
+-                exc_text = 'reading chunk termination'
+-                self.parser.read_until(b"\r\n", max_size=2, exc_text=exc_text)
+-
+-        else:
+-            # Content-Length: xxx
+-            remaining = self.recv_content_length - self.recv_seen_length
+-            size = min(remaining, 4096)
+-            body = self.parser.read(size=size)
+-            self.recv_seen_length += len(body)
+-            if self.recv_seen_length < self.recv_content_length and body == b'':
+-                msg = 'Not enough data received for declared Content-Length'
+-                raise ProtocolError(msg)
+-
+-        if body == b'':
+-            # Handle body close
+-            self.recv_state = State.DONE
+-        return body
+-
+-    def complete(self):
+-        is_fully_complete = self.send_state == State.DONE and self.recv_state == State.DONE
+-        is_keepalive = self.send_keep_alive and self.recv_keep_alive
+-
+-        if not (is_fully_complete and is_keepalive):
++                if self.recv_seen_length < self.recv_content_length and body == b'':
++                    msg = 'Not enough data received for declared Content-Length'
++                    raise ProtocolError(msg)
++        except KeyboardInterrupt:
++            # Handle server exit gracefully without raising KeyboardException
+             self.close()
+-            return
+-
+-        if self.mode == Mode.CLIENT:
+-            self.send_state = State.SEND_METHOD_LINE
+-            self.recv_state = State.WAIT
+-        else:
+-            self.recv_state = State.RECV_METHOD_LINE
+-            self.send_state = State.WAIT
++            return b''
++        except Exception as e:
++            # Re-raise other exceptions
++            raise e
++        return body
+ 
++    def reset(self) -> None:
++        """
++        Resets the parser state for a new request/response cycle.
++        """
++        self.send_state = State.SEND_METHOD_LINE if self.mode == Mode.CLIENT else State.WAIT
++        self.recv_state = State.WAIT if self.mode == Mode.CLIENT else State.RECV_METHOD_LINE
+         self.send_content_length = 0
+         self.recv_content_length = 0
+         self.send_seen_length = 0

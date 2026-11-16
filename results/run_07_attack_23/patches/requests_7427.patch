@@ -1,0 +1,79 @@
+diff --git a/src/requests/compat.py b/src/requests/compat.py
+index deab3c09..3cc8f3fc 100644
+--- a/src/requests/compat.py
++++ b/src/requests/compat.py
+@@ -12,7 +12,7 @@ compatibility until the next major version.
+ from __future__ import annotations
+ 
+ import importlib
+-import sys
++import ipaddress
+ from types import ModuleType
+ 
+ # -------
+@@ -110,4 +110,64 @@ str = str
+ bytes = bytes
+ basestring = (str, bytes)
+ numeric_types = (int, float)
+-integer_types = (int,)
++def proxy_bypass_environment(host: str, proxies: dict) -> bool:
++    """
++    Checks if the host should be bypassed based on no_proxy environment variable.
++    Constrains bypass to domain boundaries.
++    """
++    no_proxy = os.environ.get("no_proxy")
++    if not no_proxy:
++        return False
++
++    # Split and clean entries
++    entries = [e.strip() for e in no_proxy.split(",") if e.strip()]
++
++    for entry in entries:
++        # 1. Check for CIDR/IP addresses
++        try:
++            # Attempt to parse as IP/CIDR
++            if "/" in entry:
++                network = ipaddress.ip_network(entry)
++                try:
++                    # Try to resolve host to IP if it's a hostname, otherwise use it directly
++                    import socket
++                    try:
++                        target_ip = socket.inet_aton(host)
++                        if network.overlaps(ipaddress.IPv4Address(target_ip)):
++                            return True
++                    except socket.error:
++                        # Hostname, cannot check CIDR directly without resolution
++                        pass
++                except ValueError:
++                    # Not a valid CIDR, treat as hostname/literal
++                    pass
++            else:
++                # Check if it's a literal IP address
++                try:
++                    ipaddress.ip_address(entry)
++                    if host == entry:
++                        return True
++                except ValueError:
++                    pass
++
++        except ValueError:
++            # Not a valid IP/CIDR, treat as hostname
++            pass
++
++        # 2. Check for Hostname/Domain Boundary Match
++        # Check for exact match
++        if host == entry:
++            return True
++
++        # Check for subdomain match (e.g., entry='example.com', host='api.example.com')
++        # The host must end with '.entry'
++        if host.endswith("." + entry):
++            prefix = host[:-len("." + entry)]
++            if prefix:
++                return True
++        
++        # Check if entry is a suffix of host (e.g., entry='com', host='example.com')
++        if host.endswith("." + entry):
++             return True
++
++    return False

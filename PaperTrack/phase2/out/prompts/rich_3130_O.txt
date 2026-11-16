@@ -1,0 +1,191 @@
+Fix the issue. The code spans are the only repository text available. Reply with a unified diff and no other text.
+
+## Issue
+Fix markdown table rendering issue with inline styles/links
+
+## Type of changes
+
+- [x] Bug fix
+- [ ] New feature
+- [ ] Documentation / docstrings
+- [x] Tests
+- [ ] Other
+
+## Checklist
+
+- [x] I've run the latest [black](https://github.com/psf/black) with default args on new code.
+- [x] I've updated CHANGELOG.md and CONTRIBUTORS.md where appropriate.
+- [x] I've added tests for new code.
+- [x] I accept that @willmcgugan may be pedantic in the code review.
+
+## Description
+
+The table data elements were not interacting well with inline styles (in the rich sense) and the table data element would have its content overridden every time we found another excerpt of text with a different style.
+The fix was to do something similar to what `TextElement` does in its method `on_text`, which is to append the new content instead of replacing it.
+
+This fixes #3115.
+
+## Code
+### rich.markdown.TextElement
+class TextElement(MarkdownElement):
+    """Base class for elements that render text."""
+
+    def on_enter(self, context: 'MarkdownContext') -> None:
+        ...
+
+    def on_text(self, context: 'MarkdownContext', text: TextType) -> None:
+        ...
+
+    def on_leave(self, context: 'MarkdownContext') -> None:
+        ...
+
+### rich.markdown.MarkdownElement.on_text
+def on_text(self, context: "MarkdownContext", text: TextType) -> None:
+        """Called when text is parsed.
+
+        Args:
+            context (MarkdownContext): The markdown context.
+        """
+
+### rich.markdown.TextElement.on_text
+def on_text(self, context: "MarkdownContext", text: TextType) -> None:
+        self.text.append(text, context.current_style if isinstance(text, str) else None)
+
+### rich.markdown.TableDataElement.on_text
+def on_text(self, context: "MarkdownContext", text: TextType) -> None:
+        plain = text.plain if isinstance(text, Text) else text
+        style = text.style if isinstance(text, Text) else ""
+        self.content = Text(
+            plain, justify=self.justify, style=context.style_stack.current
+        )
+
+### rich.markdown.MarkdownContext.on_text
+def on_text(self, text: str, node_type: str) -> None:
+        """Called when the parser visits text."""
+        if node_type in {"fence", "code_inline"} and self._syntax is not None:
+            highlight_text = self._syntax.highlight(text)
+            highlight_text.rstrip()
+            self.stack.top.on_text(
+                self, Text.assemble(highlight_text, style=self.style_stack.current)
+            )
+        else:
+            self.stack.top.on_text(self, text)
+
+### rich.markdown.TextElement.on_enter
+def on_enter(self, context: "MarkdownContext") -> None:
+        self.style = context.enter_style(self.style_name)
+        self.text = Text(justify="left")
+
+### rich.markdown.TextElement.on_leave
+def on_leave(self, context: "MarkdownContext") -> None:
+        context.leave_style()
+
+### rich.markdown.MarkdownElement.create
+def create(cls, markdown: "Markdown", token: Token) -> "MarkdownElement":
+        """Factory to create markdown element,
+
+        Args:
+            markdown (Markdown): The parent Markdown object.
+            token (Token): A node from markdown-it.
+
+        Returns:
+            MarkdownElement: A new markdown element
+        """
+        return cls()
+
+### rich.markdown.MarkdownElement.on_enter
+def on_enter(self, context: "MarkdownContext") -> None:
+        """Called when the node is entered.
+
+        Args:
+            context (MarkdownContext): The markdown context.
+        """
+
+### rich.markdown.MarkdownElement.on_leave
+def on_leave(self, context: "MarkdownContext") -> None:
+        """Called when the parser leaves the element.
+
+        Args:
+            context (MarkdownContext): [description]
+        """
+
+### rich.markdown.MarkdownElement.on_child_close
+def on_child_close(
+        self, context: "MarkdownContext", child: "MarkdownElement"
+    ) -> bool:
+        """Called when a child element is closed.
+
+        This method allows a parent element to take over rendering of its children.
+
+        Args:
+            context (MarkdownContext): The markdown context.
+            child (MarkdownElement): The child markdown element.
+
+        Returns:
+            bool: Return True to render the element, or False to not render the element.
+        """
+        return True
+
+### rich.markdown.MarkdownElement.__rich_console__
+def __rich_console__(
+        self, console: "Console", options: "ConsoleOptions"
+    ) -> "RenderResult":
+        return ()
+
+### rich.markdown.TableDataElement.create
+def create(cls, markdown: "Markdown", token: Token) -> "MarkdownElement":
+        style = str(token.attrs.get("style" "")) or ""
+
+        justify: JustifyMethod
+        if "text-align:right" in style:
+            justify = "right"
+        elif "text-align:center" in style:
+            justify = "center"
+        elif "text-align:left" in style:
+            justify = "left"
+        else:
+            justify = "default"
+
+        assert justify in get_args(JustifyMethod)
+        return cls(justify=justify)
+
+### rich.markdown.TableDataElement.__init__
+def __init__(self, justify: JustifyMethod) -> None:
+        self.content: TextType = ""
+        self.justify = justify
+
+### rich.markdown.MarkdownContext.__init__
+def __init__(
+        self,
+        console: Console,
+        options: ConsoleOptions,
+        style: Style,
+        inline_code_lexer: Optional[str] = None,
+        inline_code_theme: str = "monokai",
+    ) -> None:
+        self.console = console
+        self.options = options
+        self.style_stack: StyleStack = StyleStack(style)
+        self.stack: Stack[MarkdownElement] = Stack()
+
+        self._syntax: Optional[Syntax] = None
+        if inline_code_lexer is not None:
+            self._syntax = Syntax("", inline_code_lexer, theme=inline_code_theme)
+
+### rich.markdown.MarkdownContext.current_style
+def current_style(self) -> Style:
+        """Current style which is the product of all styles on the stack."""
+        return self.style_stack.current
+
+### rich.markdown.MarkdownContext.enter_style
+def enter_style(self, style_name: Union[str, Style]) -> Style:
+        """Enter a style context."""
+        style = self.console.get_style(style_name, default="none")
+        self.style_stack.push(style)
+        return self.current_style
+
+### rich.markdown.MarkdownContext.leave_style
+def leave_style(self) -> Style:
+        """Leave a style context."""
+        style = self.style_stack.pop()
+        return style

@@ -1,0 +1,57 @@
+diff --git a/src/httpx/_parsers.py b/src/httpx/_parsers.py
+index 830fccd..95eaeaf 100644
+--- a/src/httpx/_parsers.py
++++ b/src/httpx/_parsers.py
+@@ -362,13 +362,22 @@ class HTTPParser:
+ 
+         else:
+             # Content-Length: xxx
+-            remaining = self.recv_content_length - self.recv_seen_length
+-            size = min(remaining, 4096)
+-            body = self.parser.read(size=size)
+-            self.recv_seen_length += len(body)
+-            if self.recv_seen_length < self.recv_content_length and body == b'':
+-                msg = 'Not enough data received for declared Content-Length'
+-                raise ProtocolError(msg)
++            body_chunks = []
++            while self.recv_seen_length < self.recv_content_length:
++                remaining = self.recv_content_length - self.recv_seen_length
++                size = min(remaining, 4096)
++                body_chunk = self.parser.read(size=size)
++                if not body_chunk:
++                    if self.recv_keep_alive:
++                        # Keep reading if keep-alive is active
++                        continue
++                    else:
++                        # Connection closed prematurely
++                        msg = 'Not enough data received for declared Content-Length'
++                        raise ProtocolError(msg)
++                body_chunks.append(body_chunk)
++                self.recv_seen_length += len(body_chunk)
++            return b"".join(body_chunks)
+ 
+         if body == b'':
+             # Handle body close
+@@ -383,6 +392,9 @@ class HTTPParser:
+             self.close()
+             return
+ 
++        self.reset()
++
++    def reset(self):
+         if self.mode == Mode.CLIENT:
+             self.send_state = State.SEND_METHOD_LINE
+             self.recv_state = State.WAIT
+diff --git a/src/httpx/_server.py b/src/httpx/_server.py
+index 95226d9..875b891 100644
+--- a/src/httpx/_server.py
++++ b/src/httpx/_server.py
+@@ -49,6 +49,8 @@ class HTTPConnection:
+                     else:
+                         self._send_head(response)
+                         self._send_body(response)
++        except KeyboardInterrupt:
++            logger.info("Server shutting down gracefully.")
+         except Exception:
+             logger.error("Internal Server Error", exc_info=True)
+ 

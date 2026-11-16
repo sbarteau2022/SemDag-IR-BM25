@@ -1,0 +1,318 @@
+Fix the issue. The code spans are the only repository text available. Reply with a unified diff and no other text.
+
+## Issue
+fix(panel): fix title missing panel background
+
+ Fix `Panel` title missing the panel background style.
+    
+This really just reverts the change in 7a38204. There's a history of issues related to the panel title styles, so I was careful to run all the examples in those issues to ensure there wasn't any regression.
+    
+Fixes #3569
+
+## Type of changes
+
+- [x] Bug fix
+- [ ] New feature
+- [ ] Documentation / docstrings
+- [ ] Tests
+- [ ] Other
+
+## Checklist
+
+- [x] I've run the latest [black](https://github.com/psf/black) with default args on new code.
+- [x] I've updated CHANGELOG.md and CONTRIBUTORS.md where appropriate.
+- [x] I've added tests for new code.
+- [x] I accept that @willmcgugan may be pedantic in the code review.
+
+
+## Code
+### rich.jupyter.JupyterMixin
+class JupyterMixin:
+    """Add to an Rich renderable to make it render in Jupyter notebook."""
+
+    def _repr_mimebundle_(self: 'ConsoleRenderable', include: Sequence[str], exclude: Sequence[str], **kwargs: Any) -> Dict[str, str]:
+        ...
+
+### rich.traceback.Traceback.render_stack
+def render_stack(stack: Stack, last: bool) -> RenderResult:
+            if stack.frames:
+                stack_renderable: ConsoleRenderable = Panel(
+                    self._render_stack(stack),
+                    title="[traceback.title]Traceback [dim](most recent call last)",
+                    style=background_style,
+                    border_style="traceback.border",
+                    expand=True,
+                    padding=(0, 1),
+                )
+                stack_renderable = Constrain(stack_renderable, self.width)
+                with console.use_theme(traceback_theme):
+                    yield stack_renderable
+
+            if stack.syntax_error is not None:
+                with console.use_theme(traceback_theme):
+                    yield Constrain(
+                        Panel(
+                            self._render_syntax_error(stack.syntax_error),
+                            style=background_style,
+                            border_style="traceback.border.syntax_error",
+                            expand=True,
+                            padding=(0, 1),
+                            width=self.width,
+                        ),
+                        self.width,
+                    )
+                yield Text.assemble(
+                    (f"{stack.exc_type}: ", "traceback.exc_type"),
+                    highlighter(stack.syntax_error.msg),
+                )
+            elif stack.exc_value:
+                yield Text.assemble(
+                    (f"{stack.exc_type}: ", "traceback.exc_type"),
+                    highlighter(stack.exc_value),
+                )
+            else:
+                yield Text.assemble((f"{stack.exc_type}", "traceback.exc_type"))
+
+            for note in stack.notes:
+                yield Text.assemble(("[NOTE] ", "traceback.note"), highlighter(note))
+
+            if stack.is_group:
+                for group_no, group_exception in enumerate(stack.exceptions, 1):
+                    grouped_exceptions: List[Group] = []
+                    for group_last, group_stack in loop_last(group_exception.stacks):
+                        grouped_exceptions.append(render_stack(group_stack, group_last))
+                    yield ""
+                    yield Constrain(
+                        Panel(
+                            Group(*grouped_exceptions),
+                            title=f"Sub-exception #{group_no}",
+                            border_style="traceback.group.border",
+                        ),
+                        self.width,
+                    )
+
+            if not last:
+                if stack.is_cause:
+                    yield Text.from_markup(
+                        "\n[i]The above exception was the direct cause of the following exception:\n",
+                    )
+                else:
+                    yield Text.from_markup(
+                        "\n[i]During handling of the above exception, another exception occurred:\n",
+                    )
+
+### rich._inspect.Inspect._render
+def _render(self) -> Iterable[RenderableType]:
+        """Render object."""
+
+        def sort_items(item: Tuple[str, Any]) -> Tuple[bool, str]:
+            key, (_error, value) = item
+            return (callable(value), key.strip("_").lower())
+
+        def safe_getattr(attr_name: str) -> Tuple[Any, Any]:
+            """Get attribute or any exception."""
+            try:
+                return (None, getattr(obj, attr_name))
+            except Exception as error:
+                return (error, None)
+
+        obj = self.obj
+        keys = dir(obj)
+        total_items = len(keys)
+        if not self.dunder:
+            keys = [key for key in keys if not key.startswith("__")]
+        if not self.private:
+            keys = [key for key in keys if not key.startswith("_")]
+        not_shown_count = total_items - len(keys)
+        items = [(key, safe_getattr(key)) for key in keys]
+        if self.sort:
+            items.sort(key=sort_items)
+
+        items_table = Table.grid(padding=(0, 1), expand=False)
+        items_table.add_column(justify="right")
+        add_row = items_table.add_row
+        highlighter = self.highlighter
+
+        if callable(obj):
+            signature = self._get_signature("", obj)
+            if signature is not None:
+                yield signature
+                yield ""
+
+        if self.docs:
+            _doc = self._get_formatted_doc(obj)
+            if _doc is not None:
+                doc_text = Text(_doc, style="inspect.help")
+                doc_text = highlighter(doc_text)
+                yield doc_text
+                yield ""
+
+        if self.value and not (isclass(obj) or callable(obj) or ismodule(obj)):
+            yield Panel(
+                Pretty(obj, indent_guides=True, max_length=10, max_string=60),
+                border_style="inspect.value.border",
+            )
+            yield ""
+
+        for key, (error, value) in items:
+            key_text = Text.assemble(
+                (
+                    key,
+                    "inspect.attr.dunder" if key.startswith("__") else "inspect.attr",
+                ),
+                (" =", "inspect.equals"),
+            )
+            if error is not None:
+                warning = key_text.copy()
+                warning.stylize("inspect.error")
+                add_row(warning, highlighter(repr(error)))
+                continue
+
+            if callable(value):
+                if not self.methods:
+                    continue
+
+                _signature_text = self._get_signature(key, value)
+                if _signature_text is None:
+                    add_row(key_text, Pretty(value, highlighter=highlighter))
+                else:
+                    if self.docs:
+                        docs = self._get_formatted_doc(value)
+                        if docs is not None:
+                            _signature_text.append("\n" if "\n" in docs else " ")
+                            doc = highlighter(docs)
+                            doc.stylize("inspect.doc")
+                            _signature_text.append(doc)
+
+                    add_row(key_text, _signature_text)
+            else:
+                add_row(key_text, Pretty(value, highlighter=highlighter))
+        if items_table.row_count:
+            yield items_table
+        elif not_shown_count:
+            yield Text.from_markup(
+                f"[b cyan]{not_shown_count}[/][i] attribute(s) not shown.[/i] "
+                f"Run [b][magenta]inspect[/]([not b]inspect[/])[/b] for options."
+            )
+
+### rich.layout._Placeholder.__rich_console__
+def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        width = options.max_width
+        height = options.height or options.size.height
+        layout = self.layout
+        title = (
+            f"{layout.name!r} ({width} x {height})"
+            if layout.name
+            else f"({width} x {height})"
+        )
+        yield Panel(
+            Align.center(Pretty(layout), vertical="middle"),
+            style=self.style,
+            title=self.highlighter(title),
+            border_style="blue",
+            height=height,
+        )
+
+### rich.panel.Panel.__init__
+def __init__(
+        self,
+        renderable: "RenderableType",
+        box: Box = ROUNDED,
+        *,
+        title: Optional[TextType] = None,
+        title_align: AlignMethod = "center",
+        subtitle: Optional[TextType] = None,
+        subtitle_align: AlignMethod = "center",
+        safe_box: Optional[bool] = None,
+        expand: bool = True,
+        style: StyleType = "none",
+        border_style: StyleType = "none",
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        padding: PaddingDimensions = (0, 1),
+        highlight: bool = False,
+    ) -> None:
+        self.renderable = renderable
+        self.box = box
+        self.title = title
+        self.title_align: AlignMethod = title_align
+        self.subtitle = subtitle
+        self.subtitle_align = subtitle_align
+        self.safe_box = safe_box
+        self.expand = expand
+        self.style = style
+        self.border_style = border_style
+        self.width = width
+        self.height = height
+        self.padding = padding
+        self.highlight = highlight
+
+### rich.panel.Panel.fit
+def fit(
+        cls,
+        renderable: "RenderableType",
+        box: Box = ROUNDED,
+        *,
+        title: Optional[TextType] = None,
+        title_align: AlignMethod = "center",
+        subtitle: Optional[TextType] = None,
+        subtitle_align: AlignMethod = "center",
+        safe_box: Optional[bool] = None,
+        style: StyleType = "none",
+        border_style: StyleType = "none",
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        padding: PaddingDimensions = (0, 1),
+        highlight: bool = False,
+    ) -> "Panel":
+        """An alternative constructor that sets expand=False."""
+        return cls(
+            renderable,
+            box,
+            title=title,
+            title_align=title_align,
+            subtitle=subtitle,
+            subtitle_align=subtitle_align,
+            safe_box=safe_box,
+            style=style,
+            border_style=border_style,
+            width=width,
+            height=height,
+            padding=padding,
+            highlight=highlight,
+            expand=False,
+        )
+
+### rich.panel.Panel._title
+def _title(self) -> Optional[Text]:
+        if self.title:
+            title_text = (
+                Text.from_markup(self.title)
+                if isinstance(self.title, str)
+                else self.title.copy()
+            )
+            title_text.end = ""
+            title_text.plain = title_text.plain.replace("\n", " ")
+            title_text.no_wrap = True
+            title_text.expand_tabs()
+            title_text.pad(1)
+            return title_text
+        return None
+
+### rich.panel.Panel._subtitle
+def _subtitle(self) -> Optional[Text]:
+        if self.subtitle:
+            subtitle_text = (
+                Text.from_markup(self.subtitle)
+                if isinstance(self.subtitle, str)
+                else self.subtitle.copy()
+            )
+            subtitle_text.end = ""
+            subtitle_text.plain = subtitle_text.plain.replace("\n", " ")
+            subtitle_text.no_wrap = True
+            subtitle_text.expand_tabs()
+            subtitle_text.pad(1)
+            return subtitle_text
+        return None

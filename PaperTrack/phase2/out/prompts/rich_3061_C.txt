@@ -1,0 +1,570 @@
+Fix the issue. The code spans are the only repository text available. Reply with a unified diff and no other text.
+
+## Issue
+Extend tabs with styles
+
+The `Text.extend_tabs` method was previously not taking in to account the spans.  Basically it would replace tabs with unstyled spaces. This resolves that issue by extending the style(s) on the tab to cover the new space characters
+
+<img width="623" alt="Screenshot 2023-07-28 at 22 00 06" src="https://github.com/Textualize/rich/assets/554369/28c170a0-b154-4a81-af17-a8a334bebd3a">
+
+
+## Code
+### rich.jupyter.JupyterMixin
+class JupyterMixin:
+    """Add to an Rich renderable to make it render in Jupyter notebook."""
+
+    def _repr_mimebundle_(self: 'ConsoleRenderable', include: Sequence[str], exclude: Sequence[str], **kwargs: Any) -> Dict[str, str]:
+        ...
+
+### rich.console.Console.render_str
+def render_str(
+        self,
+        text: str,
+        *,
+        style: Union[str, Style] = "",
+        justify: Optional[JustifyMethod] = None,
+        overflow: Optional[OverflowMethod] = None,
+        emoji: Optional[bool] = None,
+        markup: Optional[bool] = None,
+        highlight: Optional[bool] = None,
+        highlighter: Optional[HighlighterType] = None,
+    ) -> "Text":
+        """Convert a string to a Text instance. This is called automatically if
+        you print or log a string.
+
+        Args:
+            text (str): Text to render.
+            style (Union[str, Style], optional): Style to apply to rendered text.
+            justify (str, optional): Justify method: "default", "left", "center", "full", or "right". Defaults to ``None``.
+            overflow (str, optional): Overflow method: "crop", "fold", or "ellipsis". Defaults to ``None``.
+            emoji (Optional[bool], optional): Enable emoji, or ``None`` to use Console default.
+            markup (Optional[bool], optional): Enable markup, or ``None`` to use Console default.
+            highlight (Optional[bool], optional): Enable highlighting, or ``None`` to use Console default.
+            highlighter (HighlighterType, optional): Optional highlighter to apply.
+        Returns:
+            ConsoleRenderable: Renderable object.
+
+        """
+        emoji_enabled = emoji or (emoji is None and self._emoji)
+        markup_enabled = markup or (markup is None and self._markup)
+        highlight_enabled = highlight or (highlight is None and self._highlight)
+
+        if markup_enabled:
+            rich_text = render_markup(
+                text,
+                style=style,
+                emoji=emoji_enabled,
+                emoji_variant=self._emoji_variant,
+            )
+            rich_text.justify = justify
+            rich_text.overflow = overflow
+        else:
+            rich_text = Text(
+                _emoji_replace(text, default_variant=self._emoji_variant)
+                if emoji_enabled
+                else text,
+                justify=justify,
+                overflow=overflow,
+                style=style,
+            )
+
+        _highlighter = (highlighter or self.highlighter) if highlight_enabled else None
+        if _highlighter is not None:
+            highlight_text = _highlighter(str(rich_text))
+            highlight_text.copy_styles(rich_text)
+            return highlight_text
+
+        return rich_text
+
+### rich.console.Console.check_text
+def check_text() -> None:
+            if text:
+                sep_text = Text(sep, justify=justify, end=end)
+                append(sep_text.join(text))
+                text.clear()
+
+### rich.file_proxy.FileProxy.write
+def write(self, text: str) -> int:
+        if not isinstance(text, str):
+            raise TypeError(f"write() argument must be str, not {type(text).__name__}")
+        buffer = self.__buffer
+        lines: List[str] = []
+        while text:
+            line, new_line, text = text.partition("\n")
+            if new_line:
+                lines.append("".join(buffer) + line)
+                buffer.clear()
+            else:
+                buffer.append(line)
+                break
+        if lines:
+            console = self.__console
+            with console:
+                output = Text("\n").join(
+                    self.__ansi_decoder.decode_line(line) for line in lines
+                )
+                console.print(output)
+        return len(text)
+
+### rich.highlighter.Highlighter.__call__
+def __call__(self, text: Union[str, Text]) -> Text:
+        """Highlight a str or Text instance.
+
+        Args:
+            text (Union[str, ~Text]): Text to highlight.
+
+        Raises:
+            TypeError: If not called with text or str.
+
+        Returns:
+            Text: A test instance with highlighting applied.
+        """
+        if isinstance(text, str):
+            highlight_text = Text(text)
+        elif isinstance(text, Text):
+            highlight_text = text.copy()
+        else:
+            raise TypeError(f"str or Text instance required, not {text!r}")
+        self.highlight(highlight_text)
+        return highlight_text
+
+### rich.spinner.Spinner.render
+def render(self, time: float) -> "RenderableType":
+        """Render the spinner for a given time.
+
+        Args:
+            time (float): Time in seconds.
+
+        Returns:
+            RenderableType: A renderable containing animation frame.
+        """
+        if self.start_time is None:
+            self.start_time = time
+
+        frame_no = ((time - self.start_time) * self.speed) / (
+            self.interval / 1000.0
+        ) + self.frame_no_offset
+        frame = Text(
+            self.frames[int(frame_no) % len(self.frames)], style=self.style or ""
+        )
+
+        if self._update_speed:
+            self.frame_no_offset = frame_no
+            self.start_time = time
+            self.speed = self._update_speed
+            self._update_speed = 0.0
+
+        if not self.text:
+            return frame
+        elif isinstance(self.text, (str, Text)):
+            return Text.assemble(frame, " ", self.text)
+        else:
+            table = Table.grid(padding=1)
+            table.add_row(frame, self.text)
+            return table
+
+### rich.table.Table.add_row
+def add_row(
+        self,
+        *renderables: Optional["RenderableType"],
+        style: Optional[StyleType] = None,
+        end_section: bool = False,
+    ) -> None:
+        """Add a row of renderables.
+
+        Args:
+            *renderables (None or renderable): Each cell in a row must be a renderable object (including str),
+                or ``None`` for a blank cell.
+            style (StyleType, optional): An optional style to apply to the entire row. Defaults to None.
+            end_section (bool, optional): End a section and draw a line. Defaults to False.
+
+        Raises:
+            errors.NotRenderableError: If you add something that can't be rendered.
+        """
+
+        def add_cell(column: Column, renderable: "RenderableType") -> None:
+            column._cells.append(renderable)
+
+        cell_renderables: List[Optional["RenderableType"]] = list(renderables)
+
+        columns = self.columns
+        if len(cell_renderables) < len(columns):
+            cell_renderables = [
+                *cell_renderables,
+                *[None] * (len(columns) - len(cell_renderables)),
+            ]
+        for index, renderable in enumerate(cell_renderables):
+            if index == len(columns):
+                column = Column(_index=index)
+                for _ in self.rows:
+                    add_cell(column, Text(""))
+                self.columns.append(column)
+            else:
+                column = columns[index]
+            if renderable is None:
+                add_cell(column, "")
+            elif is_renderable(renderable):
+                add_cell(column, renderable)
+            else:
+                raise errors.NotRenderableError(
+                    f"unable to render {type(renderable).__name__}; a string or other renderable object is required"
+                )
+        self.rows.append(Row(style=style, end_section=end_section))
+
+### rich.logging.RichHandler.render_message
+def render_message(self, record: LogRecord, message: str) -> "ConsoleRenderable":
+        """Render message text in to Text.
+
+        Args:
+            record (LogRecord): logging Record.
+            message (str): String containing log message.
+
+        Returns:
+            ConsoleRenderable: Renderable to display log message.
+        """
+        use_markup = getattr(record, "markup", self.markup)
+        message_text = Text.from_markup(message) if use_markup else Text(message)
+
+        highlighter = getattr(record, "highlighter", self.highlighter)
+        if highlighter:
+            message_text = highlighter(message_text)
+
+        if self.keywords is None:
+            self.keywords = self.KEYWORDS
+
+        if self.keywords:
+            message_text.highlight_words(self.keywords, "logging.keyword")
+
+        return message_text
+
+### rich._inspect.Inspect._get_signature
+def _get_signature(self, name: str, obj: Any) -> Optional[Text]:
+        """Get a signature for a callable."""
+        try:
+            _signature = str(signature(obj)) + ":"
+        except ValueError:
+            _signature = "(...)"
+        except TypeError:
+            return None
+
+        source_filename: Optional[str] = None
+        try:
+            source_filename = getfile(obj)
+        except (OSError, TypeError):
+            # OSError is raised if obj has no source file, e.g. when defined in REPL.
+            pass
+
+        callable_name = Text(name, style="inspect.callable")
+        if source_filename:
+            callable_name.stylize(f"link file://{source_filename}")
+        signature_text = self.highlighter(_signature)
+
+        qualname = name or getattr(obj, "__qualname__", name)
+
+        # If obj is a module, there may be classes (which are callable) to display
+        if inspect.isclass(obj):
+            prefix = "class"
+        elif inspect.iscoroutinefunction(obj):
+            prefix = "async def"
+        else:
+            prefix = "def"
+
+        qual_signature = Text.assemble(
+            (f"{prefix} ", f"inspect.{prefix.replace(' ', '_')}"),
+            (qualname, "inspect.callable"),
+            signature_text,
+        )
+
+        return qual_signature
+
+### rich._inspect.Inspect._render
+def _render(self) -> Iterable[RenderableType]:
+        """Render object."""
+
+        def sort_items(item: Tuple[str, Any]) -> Tuple[bool, str]:
+            key, (_error, value) = item
+            return (callable(value), key.strip("_").lower())
+
+        def safe_getattr(attr_name: str) -> Tuple[Any, Any]:
+            """Get attribute or any exception."""
+            try:
+                return (None, getattr(obj, attr_name))
+            except Exception as error:
+                return (error, None)
+
+        obj = self.obj
+        keys = dir(obj)
+        total_items = len(keys)
+        if not self.dunder:
+            keys = [key for key in keys if not key.startswith("__")]
+        if not self.private:
+            keys = [key for key in keys if not key.startswith("_")]
+        not_shown_count = total_items - len(keys)
+        items = [(key, safe_getattr(key)) for key in keys]
+        if self.sort:
+            items.sort(key=sort_items)
+
+        items_table = Table.grid(padding=(0, 1), expand=False)
+        items_table.add_column(justify="right")
+        add_row = items_table.add_row
+        highlighter = self.highlighter
+
+        if callable(obj):
+            signature = self._get_signature("", obj)
+            if signature is not None:
+                yield signature
+                yield ""
+
+        if self.docs:
+            _doc = self._get_formatted_doc(obj)
+            if _doc is not None:
+                doc_text = Text(_doc, style="inspect.help")
+                doc_text = highlighter(doc_text)
+                yield doc_text
+                yield ""
+
+        if self.value and not (isclass(obj) or callable(obj) or ismodule(obj)):
+            yield Panel(
+                Pretty(obj, indent_guides=True, max_length=10, max_string=60),
+                border_style="inspect.value.border",
+            )
+            yield ""
+
+        for key, (error, value) in items:
+            key_text = Text.assemble(
+                (
+                    key,
+                    "inspect.attr.dunder" if key.startswith("__") else "inspect.attr",
+                ),
+                (" =", "inspect.equals"),
+            )
+            if error is not None:
+                warning = key_text.copy()
+                warning.stylize("inspect.error")
+                add_row(warning, highlighter(repr(error)))
+                continue
+
+            if callable(value):
+                if not self.methods:
+                    continue
+
+                _signature_text = self._get_signature(key, value)
+                if _signature_text is None:
+                    add_row(key_text, Pretty(value, highlighter=highlighter))
+                else:
+                    if self.docs:
+                        docs = self._get_formatted_doc(value)
+                        if docs is not None:
+                            _signature_text.append("\n" if "\n" in docs else " ")
+                            doc = highlighter(docs)
+                            doc.stylize("inspect.doc")
+                            _signature_text.append(doc)
+
+                    add_row(key_text, _signature_text)
+            else:
+                add_row(key_text, Pretty(value, highlighter=highlighter))
+        if items_table.row_count:
+            yield items_table
+        elif not_shown_count:
+            yield Text.from_markup(
+                f"[b cyan]{not_shown_count}[/][i] attribute(s) not shown.[/i] "
+                f"Run [b][magenta]inspect[/]([not b]inspect[/])[/b] for options."
+            )
+
+### rich.rule.Rule.__rich_console__
+def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        width = options.max_width
+
+        characters = (
+            "-"
+            if (options.ascii_only and not self.characters.isascii())
+            else self.characters
+        )
+
+        chars_len = cell_len(characters)
+        if not self.title:
+            yield self._rule_line(chars_len, width)
+            return
+
+        if isinstance(self.title, Text):
+            title_text = self.title
+        else:
+            title_text = console.render_str(self.title, style="rule.text")
+
+        title_text.plain = title_text.plain.replace("\n", " ")
+        title_text.expand_tabs()
+
+        required_space = 4 if self.align == "center" else 2
+        truncate_width = max(0, width - required_space)
+        if not truncate_width:
+            yield self._rule_line(chars_len, width)
+            return
+
+        rule_text = Text(end=self.end)
+        if self.align == "center":
+            title_text.truncate(truncate_width, overflow="ellipsis")
+            side_width = (width - cell_len(title_text.plain)) // 2
+            left = Text(characters * (side_width // chars_len + 1))
+            left.truncate(side_width - 1)
+            right_length = width - cell_len(left.plain) - cell_len(title_text.plain)
+            right = Text(characters * (side_width // chars_len + 1))
+            right.truncate(right_length)
+            rule_text.append(left.plain + " ", self.style)
+            rule_text.append(title_text)
+            rule_text.append(" " + right.plain, self.style)
+        elif self.align == "left":
+            title_text.truncate(truncate_width, overflow="ellipsis")
+            rule_text.append(title_text)
+            rule_text.append(" ")
+            rule_text.append(characters * (width - rule_text.cell_len), self.style)
+        elif self.align == "right":
+            title_text.truncate(truncate_width, overflow="ellipsis")
+            rule_text.append(characters * (width - title_text.cell_len - 1), self.style)
+            rule_text.append(" ")
+            rule_text.append(title_text)
+
+        rule_text.plain = set_cell_size(rule_text.plain, width)
+        yield rule_text
+
+### rich.rule.Rule._rule_line
+def _rule_line(self, chars_len: int, width: int) -> Text:
+        rule_text = Text(self.characters * ((width // chars_len) + 1), self.style)
+        rule_text.truncate(width)
+        rule_text.plain = set_cell_size(rule_text.plain, width)
+        return rule_text
+
+### rich.markdown.TextElement.on_enter
+def on_enter(self, context: "MarkdownContext") -> None:
+        self.style = context.enter_style(self.style_name)
+        self.text = Text(justify="left")
+
+### rich.markdown.Heading.on_enter
+def on_enter(self, context: "MarkdownContext") -> None:
+        self.text = Text()
+        context.enter_style(self.style_name)
+
+### rich.markdown.Heading.__rich_console__
+def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        text = self.text
+        text.justify = "center"
+        if self.tag == "h1":
+            # Draw a border around h1s
+            yield Panel(
+                text,
+                box=box.HEAVY,
+                style="markdown.h1.border",
+            )
+        else:
+            # Styled text for h2 and beyond
+            if self.tag == "h2":
+                yield Text("")
+            yield text
+
+### rich.markdown.TableDataElement.on_text
+def on_text(self, context: "MarkdownContext", text: TextType) -> None:
+        plain = text.plain if isinstance(text, Text) else text
+        style = text.style if isinstance(text, Text) else ""
+        self.content = Text(
+            plain, justify=self.justify, style=context.style_stack.current
+        )
+
+### rich.markdown.Link.__init__
+def __init__(self, text: str, href: str):
+        self.text = Text(text)
+        self.href = href
+
+### rich.markdown.ImageItem.on_enter
+def on_enter(self, context: "MarkdownContext") -> None:
+        self.link = context.current_style.link
+        self.text = Text(justify="left")
+        super().on_enter(context)
+
+### rich.markdown.ImageItem.__rich_console__
+def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        link_style = Style(link=self.link or self.destination or None)
+        title = self.text or Text(self.destination.strip("/").rsplit("/", 1)[-1])
+        if self.hyperlinks:
+            title.stylize(link_style)
+        text = Text.assemble("🌆 ", title, " ", end="")
+        yield text
+
+### rich.prompt.PromptBase.render_default
+def render_default(self, default: DefaultType) -> Text:
+        """Turn the supplied default in to a Text instance.
+
+        Args:
+            default (DefaultType): Default value.
+
+        Returns:
+            Text: Text containing rendering of default value.
+        """
+        return Text(f"({default})", "prompt.default")
+
+### rich.prompt.Confirm.render_default
+def render_default(self, default: DefaultType) -> Text:
+        """Render the default as (y) or (n) rather than True/False."""
+        yes, no = self.choices
+        return Text(f"({yes})" if default else f"({no})", style="prompt.default")
+
+### rich._log_render.LogRender.__call__
+def __call__(
+        self,
+        console: "Console",
+        renderables: Iterable["ConsoleRenderable"],
+        log_time: Optional[datetime] = None,
+        time_format: Optional[Union[str, FormatTimeCallable]] = None,
+        level: TextType = "",
+        path: Optional[str] = None,
+        line_no: Optional[int] = None,
+        link_path: Optional[str] = None,
+    ) -> "Table":
+        from .containers import Renderables
+        from .table import Table
+
+        output = Table.grid(padding=(0, 1))
+        output.expand = True
+        if self.show_time:
+            output.add_column(style="log.time")
+        if self.show_level:
+            output.add_column(style="log.level", width=self.level_width)
+        output.add_column(ratio=1, style="log.message", overflow="fold")
+        if self.show_path and path:
+            output.add_column(style="log.path")
+        row: List["RenderableType"] = []
+        if self.show_time:
+            log_time = log_time or console.get_datetime()
+            time_format = time_format or self.time_format
+            if callable(time_format):
+                log_time_display = time_format(log_time)
+            else:
+                log_time_display = Text(log_time.strftime(time_format))
+            if log_time_display == self._last_time and self.omit_repeated_times:
+                row.append(Text(" " * len(log_time_display)))
+            else:
+                row.append(log_time_display)
+                self._last_time = log_time_display
+        if self.show_level:
+            row.append(level)
+
+        row.append(Renderables(renderables))
+        if self.show_path and path:
+            path_text = Text()
+            path_text.append(
+                path, style=f"link file://{link_path}" if link_path else ""
+            )
+            if line_no:
+                path_text.append(":")
+                path_text.append(
+                    f"{line_no}",
+                    style=f"link file://{link_path}#{line_no}" if link_path else "",
+                )
+            row.append(path_text)
+
+        output.add_row(*row)
+        return output

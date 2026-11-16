@@ -1,0 +1,237 @@
+---
+kind: index
+run_id: e4b-mlx-capture-20261111T074425Z
+---
+
+# Observer projection
+
+Layout and link proximity are not evidence. The hashed ledger is the record.
+A zero claim count means the label was not admitted. It does not mean a quiet site is unnecessary.
+
+critical claims admitted: 0
+unnecessary claims admitted: 0
+
+## Sequence
+
+- 1. [[fb9d88c4b64d024814847f8fe9d4122b]] declares manifest 1
+- 2. [[7b61244cd399f70042e8c423304def79]] declares runtime_identity 1
+- 3. [[a2d7f1b67b901b15765ad11acf85c9c2]] supports has_kv_mismatch_count 0
+- 4. [[5e78db520ff03b741015a330b80c117f]] supports layer_type_mismatch_count 0
+- 5. [[c625de3e9aaf841e5a12bd6b31cd7420]] supports last_token_hidden_cosine 1.0
+- 6. [[f0c4712884029450484f1e77a80b6939]] supports last_token_hidden_cosine 1.0
+- 7. [[79054afcce74fa5de089f96c049cc434]] supports last_token_hidden_cosine 1.0
+- 8. [[722317723ef1df3a59f26f17ca609137]] supports last_token_hidden_cosine 1.0
+- 9. [[1322938533e892e059f4dfce3a21e2b4]] changes last_token_logit_kl 0.11906915575821002
+- 10. [[467c2b29b37aeb8fde928c01021df6d7]] changes last_token_logit_kl 0.11906915575821002
+- 11. [[2fee390f7fb276086407d226b7a541c1]] supports concordance_side 1.0
+- 12. [[7cc1866f334b06f344f8d7c51b0a89f7]] changes last_token_logit_kl 0.22411146986809635
+- 13. [[3344a55c193e926ef549f41e9c26b508]] changes last_token_logit_kl 0.22411146986809635
+- 14. [[96ce8694979949e627de0f7b70b7eb41]] supports concordance_side 1.0
+- 15. [[8c08c4cb40fef23f29666ffe4df0cb6a]] changes last_token_logit_kl 3.430896093864921
+- 16. [[fc8b3e38a75e99c5228698fe0f997843]] changes last_token_logit_kl 3.430896093864921
+- 17. [[37c3fbdc7a48a08975a088dcd0552081]] supports concordance_side 1.0
+- 18. [[ccce068c8c241c426dfe57484d4cce70]] changes last_token_logit_kl 0.0547652006173143
+- 19. [[a422000a9f7f2eb274649016490a882c]] changes last_token_logit_kl 0.0547652006173143
+- 20. [[9d4e1d81978f82dea8aa8e40d7573cd6]] supports concordance_side 1.0
+- 21. [[8971543b34146c1bfa874e1d5214c744]] changes last_token_logit_kl 1.747968359199447
+- 22. [[f6dd84fe4dcd3179edd8fdf2401d760e]] changes last_token_logit_kl 1.747968359199447
+- 23. [[025336d8d124e559f0f8cd1e92d89da2]] supports concordance_side 1.0
+- 24. [[97e5a0a2c1ccc59387e4e27ce2a80d8b]] changes last_token_logit_kl 0.014346333795394135
+- 25. [[82b536d292cd4fdd685a473ff3ade060]] changes last_token_logit_kl 0.014346333795394135
+- 26. [[311a62848915ba79bf78e86186d140f7]] supports concordance_side 0.0
+- 27. [[0de517c14c71ba7fa8533b5aaf0c8a3a]] changes last_token_logit_kl 1.3947031552832936
+- 28. [[183e3e0cd66b38e6eff3a458ca490003]] changes last_token_logit_kl 1.3947031552832936
+- 29. [[9805373490c048d30c60f49ca604b4ce]] supports concordance_side 1.0
+- 30. [[227d0938c85b998178f753abd9441ec3]] changes last_token_logit_kl 0.7936902334593373
+- 31. [[4dd123ab654782470315aa6aeac74f93]] changes last_token_logit_kl 0.7936902334593373
+- 32. [[03ab26c432b1d7c18479ea5f1ab48bff]] supports concordance_side 1.0
+- 33. [[9c986b1ce1f4497ffc936a9bdab8d226]] changes last_token_logit_kl 0.04412876555700418
+- 34. [[086c457c657d550bea67aa75a5018541]] changes last_token_logit_kl 0.04412876555700418
+- 35. [[f933e959599fa945dc4efd6300ea1048]] supports concordance_side 0.0
+- 36. [[59a578f6f5672cabd6ab336b4eb6d13e]] changes last_token_logit_kl 0.00929534643451493
+- 37. [[f6d04a863ce38476ba7a1370e2421469]] changes last_token_logit_kl 0.00929534643451493
+- 38. [[24db938f88ab5a421ecb05e85c4f22e5]] supports concordance_side 0.0
+- 39. [[691ac189fa67d657253ba24cce909270]] changes last_token_logit_kl 0.1519165500885029
+- 40. [[d0b6c426ee8b93742094a61421f9a784]] changes last_token_logit_kl 0.1519165500885029
+- 41. [[e2ad3ac91fc4534f6180f466c8cecc31]] supports concordance_side 1.0
+- 42. [[c7bdb0366b71f80f8a82c970dbc975e2]] changes last_token_logit_kl 0.005989571326501393
+- 43. [[5b832536f93115f5ff6b6fae502ac020]] changes last_token_logit_kl 0.005989571326501393
+- 44. [[1aea80e81178bb396b5cdc0911015a10]] supports concordance_side 0.0
+- 45. [[3c7eb9f6a92f5fb62099b004f92deee7]] changes last_token_logit_kl 3.6325135573266873
+- 46. [[57ab0d45b4bc05408e7d7de11cdd50e2]] changes last_token_logit_kl 3.6325135573266873
+- 47. [[69363cbdb30caef455a155b8c592fad8]] supports concordance_side 1.0
+- 48. [[ad0dcc8c517e13a155f7ec21170e0174]] changes last_token_logit_kl 0.03310028795143731
+- 49. [[43c1fb315b638518a33030e80e0cf667]] changes last_token_logit_kl 0.03310028795143731
+- 50. [[4a9c4def4d8d170ff892c8bb5848b3b9]] supports concordance_side 0.0
+- 51. [[42848856dd06705bba7aaa7d33679f39]] restores restoration_logit_kl 0.0
+- 52. [[e833d3ab4c98165448703e853d5cf857]] restores restoration_logit_kl 0.0
+- 53. [[b5bff08e184e1516fe6d739a02ecd5d3]] supports deterministic_parity 1.0
+- 54. [[69c842b1a416eb319375602b5f32ca2b]] declares end_receipt 53
+- site [[layers.0.attn_out]]
+- site [[layers.0.layer_out]]
+- site [[layers.0.mlp_out]]
+- site [[layers.0.residual_in]]
+- site [[layers.1.attn_out]]
+- site [[layers.1.layer_out]]
+- site [[layers.1.mlp_out]]
+- site [[layers.1.residual_in]]
+- site [[layers.10.attn_out]]
+- site [[layers.10.layer_out]]
+- site [[layers.10.mlp_out]]
+- site [[layers.10.residual_in]]
+- site [[layers.11.attn_out]]
+- site [[layers.11.layer_out]]
+- site [[layers.11.mlp_out]]
+- site [[layers.11.residual_in]]
+- site [[layers.12.attn_out]]
+- site [[layers.12.layer_out]]
+- site [[layers.12.mlp_out]]
+- site [[layers.12.residual_in]]
+- site [[layers.13.attn_out]]
+- site [[layers.13.layer_out]]
+- site [[layers.13.mlp_out]]
+- site [[layers.13.residual_in]]
+- site [[layers.14.attn_out]]
+- site [[layers.14.layer_out]]
+- site [[layers.14.mlp_out]]
+- site [[layers.14.residual_in]]
+- site [[layers.15.attn_out]]
+- site [[layers.15.layer_out]]
+- site [[layers.15.mlp_out]]
+- site [[layers.15.residual_in]]
+- site [[layers.16.attn_out]]
+- site [[layers.16.layer_out]]
+- site [[layers.16.mlp_out]]
+- site [[layers.16.residual_in]]
+- site [[layers.17.attn_out]]
+- site [[layers.17.layer_out]]
+- site [[layers.17.mlp_out]]
+- site [[layers.17.residual_in]]
+- site [[layers.18.attn_out]]
+- site [[layers.18.layer_out]]
+- site [[layers.18.mlp_out]]
+- site [[layers.18.residual_in]]
+- site [[layers.19.attn_out]]
+- site [[layers.19.layer_out]]
+- site [[layers.19.mlp_out]]
+- site [[layers.19.residual_in]]
+- site [[layers.2.attn_out]]
+- site [[layers.2.layer_out]]
+- site [[layers.2.mlp_out]]
+- site [[layers.2.residual_in]]
+- site [[layers.20.attn_out]]
+- site [[layers.20.layer_out]]
+- site [[layers.20.mlp_out]]
+- site [[layers.20.residual_in]]
+- site [[layers.21.attn_out]]
+- site [[layers.21.layer_out]]
+- site [[layers.21.mlp_out]]
+- site [[layers.21.residual_in]]
+- site [[layers.22.attn_out]]
+- site [[layers.22.layer_out]]
+- site [[layers.22.mlp_out]]
+- site [[layers.22.residual_in]]
+- site [[layers.23.attn_out]]
+- site [[layers.23.layer_out]]
+- site [[layers.23.mlp_out]]
+- site [[layers.23.residual_in]]
+- site [[layers.24.attn_out]]
+- site [[layers.24.layer_out]]
+- site [[layers.24.mlp_out]]
+- site [[layers.24.residual_in]]
+- site [[layers.25.attn_out]]
+- site [[layers.25.layer_out]]
+- site [[layers.25.mlp_out]]
+- site [[layers.25.residual_in]]
+- site [[layers.26.attn_out]]
+- site [[layers.26.layer_out]]
+- site [[layers.26.mlp_out]]
+- site [[layers.26.residual_in]]
+- site [[layers.27.attn_out]]
+- site [[layers.27.layer_out]]
+- site [[layers.27.mlp_out]]
+- site [[layers.27.residual_in]]
+- site [[layers.28.attn_out]]
+- site [[layers.28.layer_out]]
+- site [[layers.28.mlp_out]]
+- site [[layers.28.residual_in]]
+- site [[layers.29.attn_out]]
+- site [[layers.29.layer_out]]
+- site [[layers.29.mlp_out]]
+- site [[layers.29.residual_in]]
+- site [[layers.3.attn_out]]
+- site [[layers.3.layer_out]]
+- site [[layers.3.mlp_out]]
+- site [[layers.3.residual_in]]
+- site [[layers.30.attn_out]]
+- site [[layers.30.layer_out]]
+- site [[layers.30.mlp_out]]
+- site [[layers.30.residual_in]]
+- site [[layers.31.attn_out]]
+- site [[layers.31.layer_out]]
+- site [[layers.31.mlp_out]]
+- site [[layers.31.residual_in]]
+- site [[layers.32.attn_out]]
+- site [[layers.32.layer_out]]
+- site [[layers.32.mlp_out]]
+- site [[layers.32.residual_in]]
+- site [[layers.33.attn_out]]
+- site [[layers.33.layer_out]]
+- site [[layers.33.mlp_out]]
+- site [[layers.33.residual_in]]
+- site [[layers.34.attn_out]]
+- site [[layers.34.layer_out]]
+- site [[layers.34.mlp_out]]
+- site [[layers.34.residual_in]]
+- site [[layers.35.attn_out]]
+- site [[layers.35.layer_out]]
+- site [[layers.35.mlp_out]]
+- site [[layers.35.residual_in]]
+- site [[layers.36.attn_out]]
+- site [[layers.36.layer_out]]
+- site [[layers.36.mlp_out]]
+- site [[layers.36.residual_in]]
+- site [[layers.37.attn_out]]
+- site [[layers.37.layer_out]]
+- site [[layers.37.mlp_out]]
+- site [[layers.37.residual_in]]
+- site [[layers.38.attn_out]]
+- site [[layers.38.layer_out]]
+- site [[layers.38.mlp_out]]
+- site [[layers.38.residual_in]]
+- site [[layers.39.attn_out]]
+- site [[layers.39.layer_out]]
+- site [[layers.39.mlp_out]]
+- site [[layers.39.residual_in]]
+- site [[layers.4.attn_out]]
+- site [[layers.4.layer_out]]
+- site [[layers.4.mlp_out]]
+- site [[layers.4.residual_in]]
+- site [[layers.40.attn_out]]
+- site [[layers.40.layer_out]]
+- site [[layers.40.mlp_out]]
+- site [[layers.40.residual_in]]
+- site [[layers.41.attn_out]]
+- site [[layers.41.layer_out]]
+- site [[layers.41.mlp_out]]
+- site [[layers.41.residual_in]]
+- site [[layers.5.attn_out]]
+- site [[layers.5.layer_out]]
+- site [[layers.5.mlp_out]]
+- site [[layers.5.residual_in]]
+- site [[layers.6.attn_out]]
+- site [[layers.6.layer_out]]
+- site [[layers.6.mlp_out]]
+- site [[layers.6.residual_in]]
+- site [[layers.7.attn_out]]
+- site [[layers.7.layer_out]]
+- site [[layers.7.mlp_out]]
+- site [[layers.7.residual_in]]
+- site [[layers.8.attn_out]]
+- site [[layers.8.layer_out]]
+- site [[layers.8.mlp_out]]
+- site [[layers.8.residual_in]]
+- site [[layers.9.attn_out]]
+- site [[layers.9.layer_out]]
+- site [[layers.9.mlp_out]]
+- site [[layers.9.residual_in]]

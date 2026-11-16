@@ -1,0 +1,523 @@
+Fix the issue. The code spans are the only repository text available. Reply with a unified diff and no other text.
+
+## Issue
+Syntax padding
+
+Fixes https://github.com/Textualize/rich/issues/3727
+
+## Code
+### rich.jupyter.JupyterMixin
+class JupyterMixin:
+    """Add to an Rich renderable to make it render in Jupyter notebook."""
+
+    def _repr_mimebundle_(self: 'ConsoleRenderable', include: Sequence[str], exclude: Sequence[str], **kwargs: Any) -> Dict[str, str]:
+        ...
+
+### benchmarks.benchmarks.SyntaxWrappingSuite.setup
+def setup(self):
+        self.console = Console(
+            file=StringIO(), color_system="truecolor", legacy_windows=False
+        )
+        self.syntax = Syntax(
+            code=snippets.PYTHON_SNIPPET, lexer="python", word_wrap=True
+        )
+
+### examples.fullscreen.make_syntax
+def make_syntax() -> Syntax:
+    code = """\
+def ratio_resolve(total: int, edges: List[Edge]) -> List[int]:
+    sizes = [(edge.size or None) for edge in edges]
+
+    # While any edges haven't been calculated
+    while any(size is None for size in sizes):
+        # Get flexible edges and index to map these back on to sizes list
+        flexible_edges = [
+            (index, edge)
+            for index, (size, edge) in enumerate(zip(sizes, edges))
+            if size is None
+        ]
+        # Remaining space in total
+        remaining = total - sum(size or 0 for size in sizes)
+        if remaining <= 0:
+            # No room for flexible edges
+            sizes[:] = [(size or 0) for size in sizes]
+            break
+        # Calculate number of characters in a ratio portion
+        portion = remaining / sum((edge.ratio or 1) for _, edge in flexible_edges)
+
+        # If any edges will be less than their minimum, replace size with the minimum
+        for index, edge in flexible_edges:
+            if portion * edge.ratio <= edge.minimum_size:
+                sizes[index] = edge.minimum_size
+                break
+        else:
+            # Distribute flexible space and compensate for rounding error
+            # Since edge sizes can only be integers we need to add the remainder
+            # to the following line
+            _modf = modf
+            remainder = 0.0
+            for index, edge in flexible_edges:
+                remainder, size = _modf(portion * edge.ratio + remainder)
+                sizes[index] = int(size)
+            break
+    # Sizes now contains integers only
+    return cast(List[int], sizes)
+    """
+    syntax = Syntax(code, "python", line_numbers=True)
+    return syntax
+
+### rich.markdown.CodeBlock.__rich_console__
+def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        code = str(self.text).rstrip()
+        syntax = Syntax(
+            code, self.lexer_name, theme=self.theme, word_wrap=True, padding=1
+        )
+        yield syntax
+
+### rich.markdown.MarkdownContext.__init__
+def __init__(
+        self,
+        console: Console,
+        options: ConsoleOptions,
+        style: Style,
+        inline_code_lexer: str | None = None,
+        inline_code_theme: str = "monokai",
+    ) -> None:
+        self.console = console
+        self.options = options
+        self.style_stack: StyleStack = StyleStack(style)
+        self.stack: Stack[MarkdownElement] = Stack()
+
+        self._syntax: Syntax | None = None
+        if inline_code_lexer is not None:
+            self._syntax = Syntax("", inline_code_lexer, theme=inline_code_theme)
+
+### rich.traceback.Traceback._render_stack
+def _render_stack(self, stack: Stack) -> RenderResult:
+        path_highlighter = PathHighlighter()
+        theme = self.theme
+
+        def render_locals(frame: Frame) -> Iterable[ConsoleRenderable]:
+            if frame.locals:
+                yield render_scope(
+                    frame.locals,
+                    title="locals",
+                    indent_guides=self.indent_guides,
+                    max_length=self.locals_max_length,
+                    max_string=self.locals_max_string,
+                )
+
+        exclude_frames: Optional[range] = None
+        if self.max_frames != 0:
+            exclude_frames = range(
+                self.max_frames // 2,
+                len(stack.frames) - self.max_frames // 2,
+            )
+
+        excluded = False
+        for frame_index, frame in enumerate(stack.frames):
+            if exclude_frames and frame_index in exclude_frames:
+                excluded = True
+                continue
+
+            if excluded:
+                assert exclude_frames is not None
+                yield Text(
+                    f"\n... {len(exclude_frames)} frames hidden ...",
+                    justify="center",
+                    style="traceback.error",
+                )
+                excluded = False
+
+            first = frame_index == 0
+            frame_filename = frame.filename
+            suppressed = any(frame_filename.startswith(path) for path in self.suppress)
+
+            if os.path.exists(frame.filename):
+                text = Text.assemble(
+                    path_highlighter(Text(frame.filename, style="pygments.string")),
+                    (":", "pygments.text"),
+                    (str(frame.lineno), "pygments.number"),
+                    " in ",
+                    (frame.name, "pygments.function"),
+                    style="pygments.text",
+                )
+            else:
+                text = Text.assemble(
+                    "in ",
+                    (frame.name, "pygments.function"),
+                    (":", "pygments.text"),
+                    (str(frame.lineno), "pygments.number"),
+                    style="pygments.text",
+                )
+            if not frame.filename.startswith("<") and not first:
+                yield ""
+            yield text
+            if frame.filename.startswith("<"):
+                yield from render_locals(frame)
+                continue
+            if not suppressed:
+                try:
+                    code_lines = linecache.getlines(frame.filename)
+                    code = "".join(code_lines)
+                    if not code:
+                        # code may be an empty string if the file doesn't exist, OR
+                        # if the traceback filename is generated dynamically
+                        continue
+                    lexer_name = self._guess_lexer(frame.filename, code)
+                    syntax = Syntax(
+                        code,
+                        lexer_name,
+                        theme=theme,
+                        line_numbers=True,
+                        line_range=(
+                            frame.lineno - self.extra_lines,
+                            frame.lineno + self.extra_lines,
+                        ),
+                        highlight_lines={frame.lineno},
+                        word_wrap=self.word_wrap,
+                        code_width=self.code_width,
+                        indent_guides=self.indent_guides,
+                        dedent=False,
+                    )
+                    yield ""
+                except Exception as error:
+                    yield Text.assemble(
+                        (f"\n{error}", "traceback.error"),
+                    )
+                else:
+                    if frame.last_instruction is not None:
+                        start, end = frame.last_instruction
+
+                        # Stylize a line at a time
+                        # So that indentation isn't underlined (which looks bad)
+                        for line1, column1, column2 in _iter_syntax_lines(start, end):
+                            try:
+                                if column1 == 0:
+                                    line = code_lines[line1 - 1]
+                                    column1 = len(line) - len(line.lstrip())
+                                if column2 == -1:
+                                    column2 = len(code_lines[line1 - 1])
+                            except IndexError:
+                                # Being defensive here
+                                # If last_instruction reports a line out-of-bounds, we don't want to crash
+                                continue
+
+                            syntax.stylize_range(
+                                style="traceback.error_range",
+                                start=(line1, column1),
+                                end=(line1, column2),
+                            )
+                    yield (
+                        Columns(
+                            [
+                                syntax,
+                                *render_locals(frame),
+                            ],
+                            padding=1,
+                        )
+                        if frame.locals
+                        else syntax
+                    )
+
+### rich.syntax.Syntax.get_theme
+def get_theme(cls, name: Union[str, SyntaxTheme]) -> SyntaxTheme:
+        """Get a syntax theme instance."""
+        if isinstance(name, SyntaxTheme):
+            return name
+        theme: SyntaxTheme
+        if name in RICH_SYNTAX_THEMES:
+            theme = ANSISyntaxTheme(RICH_SYNTAX_THEMES[name])
+        else:
+            theme = PygmentsSyntaxTheme(name)
+        return theme
+
+### rich.syntax.Syntax.__init__
+def __init__(
+        self,
+        code: str,
+        lexer: Union[Lexer, str],
+        *,
+        theme: Union[str, SyntaxTheme] = DEFAULT_THEME,
+        dedent: bool = False,
+        line_numbers: bool = False,
+        start_line: int = 1,
+        line_range: Optional[Tuple[Optional[int], Optional[int]]] = None,
+        highlight_lines: Optional[Set[int]] = None,
+        code_width: Optional[int] = None,
+        tab_size: int = 4,
+        word_wrap: bool = False,
+        background_color: Optional[str] = None,
+        indent_guides: bool = False,
+        padding: PaddingDimensions = 0,
+    ) -> None:
+        self.code = code
+        self._lexer = lexer
+        self.dedent = dedent
+        self.line_numbers = line_numbers
+        self.start_line = start_line
+        self.line_range = line_range
+        self.highlight_lines = highlight_lines or set()
+        self.code_width = code_width
+        self.tab_size = tab_size
+        self.word_wrap = word_wrap
+        self.background_color = background_color
+        self.background_style = (
+            Style(bgcolor=background_color) if background_color else Style()
+        )
+        self.indent_guides = indent_guides
+        self.padding = padding
+
+        self._theme = self.get_theme(theme)
+        self._stylized_ranges: List[_SyntaxHighlightRange] = []
+
+### rich.syntax.Syntax.from_path
+def from_path(
+        cls,
+        path: str,
+        encoding: str = "utf-8",
+        lexer: Optional[Union[Lexer, str]] = None,
+        theme: Union[str, SyntaxTheme] = DEFAULT_THEME,
+        dedent: bool = False,
+        line_numbers: bool = False,
+        line_range: Optional[Tuple[int, int]] = None,
+        start_line: int = 1,
+        highlight_lines: Optional[Set[int]] = None,
+        code_width: Optional[int] = None,
+        tab_size: int = 4,
+        word_wrap: bool = False,
+        background_color: Optional[str] = None,
+        indent_guides: bool = False,
+        padding: PaddingDimensions = 0,
+    ) -> "Syntax":
+        """Construct a Syntax object from a file.
+
+        Args:
+            path (str): Path to file to highlight.
+            encoding (str): Encoding of file.
+            lexer (str | Lexer, optional): Lexer to use. If None, lexer will be auto-detected from path/file content.
+            theme (str, optional): Color theme, aka Pygments style (see https://pygments.org/docs/styles/#getting-a-list-of-available-styles). Defaults to "emacs".
+            dedent (bool, optional): Enable stripping of initial whitespace. Defaults to True.
+            line_numbers (bool, optional): Enable rendering of line numbers. Defaults to False.
+            start_line (int, optional): Starting number for line numbers. Defaults to 1.
+            line_range (Tuple[int, int], optional): If given should be a tuple of the start and end line to render.
+            highlight_lines (Set[int]): A set of line numbers to highlight.
+            code_width: Width of code to render (not including line numbers), or ``None`` to use all available width.
+            tab_size (int, optional): Size of tabs. Defaults to 4.
+            word_wrap (bool, optional): Enable word wrapping of code.
+            background_color (str, optional): Optional background color, or None to use theme color. Defaults to None.
+            indent_guides (bool, optional): Show indent guides. Defaults to False.
+            padding (PaddingDimensions): Padding to apply around the syntax. Defaults to 0 (no padding).
+
+        Returns:
+            [Syntax]: A Syntax object that may be printed to the console
+        """
+        code = Path(path).read_text(encoding=encoding)
+
+        if not lexer:
+            lexer = cls.guess_lexer(path, code=code)
+
+        return cls(
+            code,
+            lexer,
+            theme=theme,
+            dedent=dedent,
+            line_numbers=line_numbers,
+            line_range=line_range,
+            start_line=start_line,
+            highlight_lines=highlight_lines,
+            code_width=code_width,
+            tab_size=tab_size,
+            word_wrap=word_wrap,
+            background_color=background_color,
+            indent_guides=indent_guides,
+            padding=padding,
+        )
+
+### rich.syntax.Syntax.guess_lexer
+def guess_lexer(cls, path: str, code: Optional[str] = None) -> str:
+        """Guess the alias of the Pygments lexer to use based on a path and an optional string of code.
+        If code is supplied, it will use a combination of the code and the filename to determine the
+        best lexer to use. For example, if the file is ``index.html`` and the file contains Django
+        templating syntax, then "html+django" will be returned. If the file is ``index.html``, and no
+        templating language is used, the "html" lexer will be used. If no string of code
+        is supplied, the lexer will be chosen based on the file extension..
+
+        Args:
+             path (AnyStr): The path to the file containing the code you wish to know the lexer for.
+             code (str, optional): Optional string of code that will be used as a fallback if no lexer
+                is found for the supplied path.
+
+        Returns:
+            str: The name of the Pygments lexer that best matches the supplied path/code.
+        """
+        lexer: Optional[Lexer] = None
+        lexer_name = "default"
+        if code:
+            try:
+                lexer = guess_lexer_for_filename(path, code)
+            except ClassNotFound:
+                pass
+
+        if not lexer:
+            try:
+                _, ext = os.path.splitext(path)
+                if ext:
+                    extension = ext.lstrip(".").lower()
+                    lexer = get_lexer_by_name(extension)
+            except ClassNotFound:
+                pass
+
+        if lexer:
+            if lexer.aliases:
+                lexer_name = lexer.aliases[0]
+            else:
+                lexer_name = lexer.name
+
+        return lexer_name
+
+### rich.syntax.Syntax._get_base_style
+def _get_base_style(self) -> Style:
+        """Get the base style."""
+        default_style = self._theme.get_background_style() + self.background_style
+        return default_style
+
+### rich.syntax.Syntax._get_token_color
+def _get_token_color(self, token_type: TokenType) -> Optional[Color]:
+        """Get a color (if any) for the given token.
+
+        Args:
+            token_type (TokenType): A token type tuple from Pygments.
+
+        Returns:
+            Optional[Color]: Color from theme, or None for no color.
+        """
+        style = self._theme.get_style_for_token(token_type)
+        return style.color
+
+### rich.syntax.Syntax.lexer
+def lexer(self) -> Optional[Lexer]:
+        """The lexer for this syntax, or None if no lexer was found.
+
+        Tries to find the lexer by name if a string was passed to the constructor.
+        """
+
+        if isinstance(self._lexer, Lexer):
+            return self._lexer
+        try:
+            return get_lexer_by_name(
+                self._lexer,
+                stripnl=False,
+                ensurenl=True,
+                tabsize=self.tab_size,
+            )
+        except ClassNotFound:
+            return None
+
+### rich.syntax.Syntax.default_lexer
+def default_lexer(self) -> Lexer:
+        """A Pygments Lexer to use if one is not specified or invalid."""
+        return get_lexer_by_name(
+            "text",
+            stripnl=False,
+            ensurenl=True,
+            tabsize=self.tab_size,
+        )
+
+### rich.syntax.Syntax.highlight
+def highlight(
+        self,
+        code: str,
+        line_range: Optional[Tuple[Optional[int], Optional[int]]] = None,
+    ) -> Text:
+        """Highlight code and return a Text instance.
+
+        Args:
+            code (str): Code to highlight.
+            line_range(Tuple[int, int], optional): Optional line range to highlight.
+
+        Returns:
+            Text: A text instance containing highlighted syntax.
+        """
+
+        base_style = self._get_base_style()
+        justify: JustifyMethod = (
+            "default" if base_style.transparent_background else "left"
+        )
+
+        text = Text(
+            justify=justify,
+            style=base_style,
+            tab_size=self.tab_size,
+            no_wrap=not self.word_wrap,
+        )
+        _get_theme_style = self._theme.get_style_for_token
+
+        lexer = self.lexer or self.default_lexer
+
+        if lexer is None:
+            text.append(code)
+        else:
+            if line_range:
+                # More complicated path to only stylize a portion of the code
+                # This speeds up further operations as there are less spans to process
+                line_start, line_end = line_range
+
+                def line_tokenize() -> Iterable[Tuple[Any, str]]:
+                    """Split tokens to one per line."""
+                    assert lexer  # required to make MyPy happy - we know lexer is not None at this point
+
+                    for token_type, token in lexer.get_tokens(code):
+                        while token:
+                            line_token, new_line, token = token.partition("\n")
+                            yield token_type, line_token + new_line
+
+                def tokens_to_spans() -> Iterable[Tuple[str, Optional[Style]]]:
+                    """Convert tokens to spans."""
+                    tokens = iter(line_tokenize())
+                    line_no = 0
+                    _line_start = line_start - 1 if line_start else 0
+
+                    # Skip over tokens until line start
+                    while line_no < _line_start:
+                        try:
+                            _token_type, token = next(tokens)
+                        except StopIteration:
+                            break
+                        yield (token, None)
+                        if token.endswith("\n"):
+                            line_no += 1
+                    # Generate spans until line end
+                    for token_type, token in tokens:
+                        yield (token, _get_theme_style(token_type))
+                        if token.endswith("\n"):
+                            line_no += 1
+                            if line_end and line_no >= line_end:
+                                break
+
+                text.append_tokens(tokens_to_spans())
+
+            else:
+                text.append_tokens(
+                    (token, _get_theme_style(token_type))
+                    for token_type, token in lexer.get_tokens(code)
+                )
+            if self.background_color is not None:
+                text.stylize(f"on {self.background_color}")
+
+        if self._stylized_ranges:
+            self._apply_stylized_ranges(text)
+
+        return text
+
+### rich.syntax.Syntax.line_tokenize
+def line_tokenize() -> Iterable[Tuple[Any, str]]:
+                    """Split tokens to one per line."""
+                    assert lexer  # required to make MyPy happy - we know lexer is not None at this point
+
+                    for token_type, token in lexer.get_tokens(code):
+                        while token:
+                            line_token, new_line, token = token.partition("\n")
+                            yield token_type, line_token + new_line

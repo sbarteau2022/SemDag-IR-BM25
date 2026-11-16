@@ -1,0 +1,505 @@
+Fix the issue. The code spans are the only repository text available. Reply with a unified diff and no other text.
+
+## Issue
+Handle unusual __qualname__ in inspect
+
+<!--
+Please note that Rich isn't accepting any new features at this point.
+
+If a feature can be implemented without modifying the core library, then
+they should be released as a third-party module. I can accept updates to the
+core library that make it easier to extend (think hooks).
+
+Bugfixes are always welcome of course.
+
+Sometimes it is not clear what is a feature and what is a bug fix.
+If there is any doubt, please open a discussion first.
+
+-->
+
+<!--
+*Are you contributing typo fixes?*
+
+If your PR solely consists of typos, at least one must be in the docs to warrant an addition to CONTRIBUTORS.md
+-->
+
+## Type of changes
+
+- [x] Bug fix
+- [ ] New feature
+- [ ] Documentation / docstrings
+- [x] Tests
+- [ ] Other
+
+## Checklist
+
+- [x] I've run the latest [black](https://github.com/psf/black) with default args on new code.
+- [x] I've updated CHANGELOG.md and CONTRIBUTORS.md where appropriate (see note about typos above).
+- [x] I've added tests for new code.
+- [x] I accept that @willmcgugan may be pedantic in the code review.
+
+## Description
+
+I discovered, that an object with an unusual `__qualname__` attribute (not a `str`, e.g. a descriptor) causes `inspect` to fail.
+This can happen if an object is created this way intentionally, but I discovered it, when decorating a class with `@functools.lru_cache` which forwards the underlying attributes using a descriptor when it can't add the to it's `__dict__` because the class uses `__slots__`:
+
+```python
+from functools import lru_cache
+from rich import inspect
+
+
+@lru_cache
+class Klaas:
+    __slots__ = ("__qualname__",)
+
+
+if __name__ == "__main__":
+    from rich.traceback import install
+
+    install()
+
+    inspect(Klaas.__qualname__)
+    inspect(Klaas, all=True)
+```
+
+I fixed it by checking the type of `__qualname__` falling back to `__name__` and if that isn't a `str` using the already provided fallback.
+
+
+## Code
+### rich.containers.Lines.extend
+def extend(self, lines: Iterable["Text"]) -> None:
+        self._lines.extend(lines)
+
+### rich.text.Span.extend
+def extend(self, cells: int) -> "Span":
+        """Extend the span by the given number of cells.
+
+        Args:
+            cells (int): Additional space to add to end of span.
+
+        Returns:
+            Span: A span.
+        """
+        if cells:
+            start, end, style = self
+            return Span(start, end + cells, style)
+        else:
+            return self
+
+### rich.inspect
+def inspect(
+    obj: Any,
+    *,
+    console: Optional["Console"] = None,
+    title: Optional[str] = None,
+    help: bool = False,
+    methods: bool = False,
+    docs: bool = True,
+    private: bool = False,
+    dunder: bool = False,
+    sort: bool = True,
+    all: bool = False,
+    value: bool = True,
+) -> None:
+    """Inspect any Python object.
+
+    * inspect(<OBJECT>) to see summarized info.
+    * inspect(<OBJECT>, methods=True) to see methods.
+    * inspect(<OBJECT>, help=True) to see full (non-abbreviated) help.
+    * inspect(<OBJECT>, private=True) to see private attributes (single underscore).
+    * inspect(<OBJECT>, dunder=True) to see attributes beginning with double underscore.
+    * inspect(<OBJECT>, all=True) to see all attributes.
+
+    Args:
+        obj (Any): An object to inspect.
+        title (str, optional): Title to display over inspect result, or None use type. Defaults to None.
+        help (bool, optional): Show full help text rather than just first paragraph. Defaults to False.
+        methods (bool, optional): Enable inspection of callables. Defaults to False.
+        docs (bool, optional): Also render doc strings. Defaults to True.
+        private (bool, optional): Show private attributes (beginning with underscore). Defaults to False.
+        dunder (bool, optional): Show attributes starting with double underscore. Defaults to False.
+        sort (bool, optional): Sort attributes alphabetically. Defaults to True.
+        all (bool, optional): Show all attributes. Defaults to False.
+        value (bool, optional): Pretty print value. Defaults to True.
+    """
+    _console = console or get_console()
+    from rich._inspect import Inspect
+
+    # Special case for inspect(inspect)
+    is_inspect = obj is inspect
+
+    _inspect = Inspect(
+        obj,
+        title=title,
+        help=is_inspect or help,
+        methods=is_inspect or methods,
+        docs=is_inspect or docs,
+        private=private,
+        dunder=dunder,
+        sort=sort,
+        all=all,
+        value=value,
+    )
+    _console.print(_inspect)
+
+### rich.pretty.install
+def install(
+    console: Optional["Console"] = None,
+    overflow: "OverflowMethod" = "ignore",
+    crop: bool = False,
+    indent_guides: bool = False,
+    max_length: Optional[int] = None,
+    max_string: Optional[int] = None,
+    max_depth: Optional[int] = None,
+    expand_all: bool = False,
+) -> None:
+    """Install automatic pretty printing in the Python REPL.
+
+    Args:
+        console (Console, optional): Console instance or ``None`` to use global console. Defaults to None.
+        overflow (Optional[OverflowMethod], optional): Overflow method. Defaults to "ignore".
+        crop (Optional[bool], optional): Enable cropping of long lines. Defaults to False.
+        indent_guides (bool, optional): Enable indentation guides. Defaults to False.
+        max_length (int, optional): Maximum length of containers before abbreviating, or None for no abbreviation.
+            Defaults to None.
+        max_string (int, optional): Maximum length of string before truncating, or None to disable. Defaults to None.
+        max_depth (int, optional): Maximum depth of nested data structures, or None for no maximum. Defaults to None.
+        expand_all (bool, optional): Expand all containers. Defaults to False.
+        max_frames (int): Maximum number of frames to show in a traceback, 0 for no maximum. Defaults to 100.
+    """
+    from rich import get_console
+
+    console = console or get_console()
+    assert console is not None
+
+    def display_hook(value: Any) -> None:
+        """Replacement sys.displayhook which prettifies objects with Rich."""
+        if value is not None:
+            assert console is not None
+            builtins._ = None  # type: ignore[attr-defined]
+            console.print(
+                (
+                    value
+                    if _safe_isinstance(value, RichRenderable)
+                    else Pretty(
+                        value,
+                        overflow=overflow,
+                        indent_guides=indent_guides,
+                        max_length=max_length,
+                        max_string=max_string,
+                        max_depth=max_depth,
+                        expand_all=expand_all,
+                    )
+                ),
+                crop=crop,
+            )
+            builtins._ = value  # type: ignore[attr-defined]
+
+    try:
+        ip = get_ipython()  # type: ignore[name-defined]
+    except NameError:
+        sys.displayhook = display_hook
+    else:
+        from IPython.core.formatters import BaseFormatter
+
+        class RichFormatter(BaseFormatter):  # type: ignore[misc]
+            pprint: bool = True
+
+            def __call__(self, value: Any) -> Any:
+                if self.pprint:
+                    return _ipy_display_hook(
+                        value,
+                        console=get_console(),
+                        overflow=overflow,
+                        indent_guides=indent_guides,
+                        max_length=max_length,
+                        max_string=max_string,
+                        max_depth=max_depth,
+                        expand_all=expand_all,
+                    )
+                else:
+                    return repr(value)
+
+        # replace plain text formatter with rich formatter
+        rich_formatter = RichFormatter()
+        ip.display_formatter.formatters["text/plain"] = rich_formatter
+
+### rich.traceback.install
+def install(
+    *,
+    console: Optional[Console] = None,
+    width: Optional[int] = 100,
+    code_width: Optional[int] = 88,
+    extra_lines: int = 3,
+    theme: Optional[str] = None,
+    word_wrap: bool = False,
+    show_locals: bool = False,
+    locals_max_length: int = LOCALS_MAX_LENGTH,
+    locals_max_string: int = LOCALS_MAX_STRING,
+    locals_hide_dunder: bool = True,
+    locals_hide_sunder: Optional[bool] = None,
+    indent_guides: bool = True,
+    suppress: Iterable[Union[str, ModuleType]] = (),
+    max_frames: int = 100,
+) -> Callable[[Type[BaseException], BaseException, Optional[TracebackType]], Any]:
+    """Install a rich traceback handler.
+
+    Once installed, any tracebacks will be printed with syntax highlighting and rich formatting.
+
+
+    Args:
+        console (Optional[Console], optional): Console to write exception to. Default uses internal Console instance.
+        width (Optional[int], optional): Width (in characters) of traceback. Defaults to 100.
+        code_width (Optional[int], optional): Code width (in characters) of traceback. Defaults to 88.
+        extra_lines (int, optional): Extra lines of code. Defaults to 3.
+        theme (Optional[str], optional): Pygments theme to use in traceback. Defaults to ``None`` which will pick
+            a theme appropriate for the platform.
+        word_wrap (bool, optional): Enable word wrapping of long lines. Defaults to False.
+        show_locals (bool, optional): Enable display of local variables. Defaults to False.
+        locals_max_length (int, optional): Maximum length of containers before abbreviating, or None for no abbreviation.
+            Defaults to 10.
+        locals_max_string (int, optional): Maximum length of string before truncating, or None to disable. Defaults to 80.
+        locals_hide_dunder (bool, optional): Hide locals prefixed with double underscore. Defaults to True.
+        locals_hide_sunder (bool, optional): Hide locals prefixed with single underscore. Defaults to False.
+        indent_guides (bool, optional): Enable indent guides in code and locals. Defaults to True.
+        suppress (Sequence[Union[str, ModuleType]]): Optional sequence of modules or paths to exclude from traceback.
+
+    Returns:
+        Callable: The previous exception handler that was replaced.
+
+    """
+    traceback_console = Console(stderr=True) if console is None else console
+
+    locals_hide_sunder = (
+        True
+        if (traceback_console.is_jupyter and locals_hide_sunder is None)
+        else locals_hide_sunder
+    )
+
+    def excepthook(
+        type_: Type[BaseException],
+        value: BaseException,
+        traceback: Optional[TracebackType],
+    ) -> None:
+        exception_traceback = Traceback.from_exception(
+            type_,
+            value,
+            traceback,
+            width=width,
+            code_width=code_width,
+            extra_lines=extra_lines,
+            theme=theme,
+            word_wrap=word_wrap,
+            show_locals=show_locals,
+            locals_max_length=locals_max_length,
+            locals_max_string=locals_max_string,
+            locals_hide_dunder=locals_hide_dunder,
+            locals_hide_sunder=bool(locals_hide_sunder),
+            indent_guides=indent_guides,
+            suppress=suppress,
+            max_frames=max_frames,
+        )
+        traceback_console.print(exception_traceback)
+
+    def ipy_excepthook_closure(ip: Any) -> None:  # pragma: no cover
+        tb_data = {}  # store information about showtraceback call
+        default_showtraceback = ip.showtraceback  # keep reference of default traceback
+
+        def ipy_show_traceback(*args: Any, **kwargs: Any) -> None:
+            """wrap the default ip.showtraceback to store info for ip._showtraceback"""
+            nonlocal tb_data
+            tb_data = kwargs
+            default_showtraceback(*args, **kwargs)
+
+        def ipy_display_traceback(
+            *args: Any, is_syntax: bool = False, **kwargs: Any
+        ) -> None:
+            """Internally called traceback from ip._showtraceback"""
+            nonlocal tb_data
+            exc_tuple = ip._get_exc_info()
+
+            # do not display trace on syntax error
+            tb: Optional[TracebackType] = None if is_syntax else exc_tuple[2]
+
+            # determine correct tb_offset
+            compiled = tb_data.get("running_compiled_code", False)
+            tb_offset = tb_data.get("tb_offset")
+            if tb_offset is None:
+                tb_offset = 1 if compiled else 0
+            # remove ipython internal frames from trace with tb_offset
+            for _ in range(tb_offset):
+                if tb is None:
+                    break
+                tb = tb.tb_next
+
+            excepthook(exc_tuple[0], exc_tuple[1], tb)
+            tb_data = {}  # clear data upon usage
+
+        # replace _showtraceback instead of showtraceback to allow ipython features such as debugging to work
+        # this is also what the ipython docs recommends to modify when subclassing InteractiveShell
+        ip._showtraceback = ipy_display_traceback
+        # add wrapper to capture tb_data
+        ip.showtraceback = ipy_show_traceback
+        ip.showsyntaxerror = lambda *args, **kwargs: ipy_display_traceback(
+            *args, is_syntax=True, **kwargs
+        )
+
+    try:  # pragma: no cover
+        # if within ipython, use customized traceback
+        ip = get_ipython()  # type: ignore[name-defined]
+        ipy_excepthook_closure(ip)
+        return sys.excepthook
+    except Exception:
+        # otherwise use default system hook
+        old_excepthook = sys.excepthook
+        sys.excepthook = excepthook
+        return old_excepthook
+
+### rich.containers.Lines.__init__
+def __init__(self, lines: Iterable["Text"] = ()) -> None:
+        self._lines: List["Text"] = list(lines)
+
+### rich.containers.Lines.__repr__
+def __repr__(self) -> str:
+        return f"Lines({self._lines!r})"
+
+### rich.containers.Lines.__iter__
+def __iter__(self) -> Iterator["Text"]:
+        return iter(self._lines)
+
+### rich.containers.Lines.__getitem__
+def __getitem__(self, index: Union[slice, int]) -> Union["Text", List["Text"]]:
+        return self._lines[index]
+
+### rich.containers.Lines.__setitem__
+def __setitem__(self, index: int, value: "Text") -> "Lines":
+        self._lines[index] = value
+        return self
+
+### rich.containers.Lines.__len__
+def __len__(self) -> int:
+        return self._lines.__len__()
+
+### rich.containers.Lines.__rich_console__
+def __rich_console__(
+        self, console: "Console", options: "ConsoleOptions"
+    ) -> "RenderResult":
+        """Console render method to insert line-breaks."""
+        yield from self._lines
+
+### rich.containers.Lines.append
+def append(self, line: "Text") -> None:
+        self._lines.append(line)
+
+### rich.containers.Lines.pop
+def pop(self, index: int = -1) -> "Text":
+        return self._lines.pop(index)
+
+### rich.containers.Lines.justify
+def justify(
+        self,
+        console: "Console",
+        width: int,
+        justify: "JustifyMethod" = "left",
+        overflow: "OverflowMethod" = "fold",
+    ) -> None:
+        """Justify and overflow text to a given width.
+
+        Args:
+            console (Console): Console instance.
+            width (int): Number of cells available per line.
+            justify (str, optional): Default justify method for text: "left", "center", "full" or "right". Defaults to "left".
+            overflow (str, optional): Default overflow for text: "crop", "fold", or "ellipsis". Defaults to "fold".
+
+        """
+        from .text import Text
+
+        if justify == "left":
+            for line in self._lines:
+                line.truncate(width, overflow=overflow, pad=True)
+        elif justify == "center":
+            for line in self._lines:
+                line.rstrip()
+                line.truncate(width, overflow=overflow)
+                line.pad_left((width - cell_len(line.plain)) // 2)
+                line.pad_right(width - cell_len(line.plain))
+        elif justify == "right":
+            for line in self._lines:
+                line.rstrip()
+                line.truncate(width, overflow=overflow)
+                line.pad_left(width - cell_len(line.plain))
+        elif justify == "full":
+            for line_index, line in enumerate(self._lines):
+                if line_index == len(self._lines) - 1:
+                    break
+                words = line.split(" ")
+                words_size = sum(cell_len(word.plain) for word in words)
+                num_spaces = len(words) - 1
+                spaces = [1 for _ in range(num_spaces)]
+                index = 0
+                if spaces:
+                    while words_size + num_spaces < width:
+                        spaces[len(spaces) - index - 1] += 1
+                        num_spaces += 1
+                        index = (index + 1) % len(spaces)
+                tokens: List[Text] = []
+                for index, (word, next_word) in enumerate(
+                    zip_longest(words, words[1:])
+                ):
+                    tokens.append(word)
+                    if index < len(spaces):
+                        style = word.get_style_at_offset(console, -1)
+                        next_style = next_word.get_style_at_offset(console, 0)
+                        space_style = style if style == next_style else line.style
+                        tokens.append(Text(" " * spaces[index], style=space_style))
+                self[line_index] = Text("").join(tokens)
+
+### rich.text.Span.__repr__
+def __repr__(self) -> str:
+        return f"Span({self.start}, {self.end}, {self.style!r})"
+
+### rich.text.Span.__bool__
+def __bool__(self) -> bool:
+        return self.end > self.start
+
+### rich.text.Span.split
+def split(self, offset: int) -> Tuple["Span", Optional["Span"]]:
+        """Split a span in to 2 from a given offset."""
+
+        if offset < self.start:
+            return self, None
+        if offset >= self.end:
+            return self, None
+
+        start, end, style = self
+        span1 = Span(start, min(end, offset), style)
+        span2 = Span(span1.end, end, style)
+        return span1, span2
+
+### rich.text.Span.move
+def move(self, offset: int) -> "Span":
+        """Move start and end by a given offset.
+
+        Args:
+            offset (int): Number of characters to add to start and end.
+
+        Returns:
+            TextSpan: A new TextSpan with adjusted position.
+        """
+        start, end, style = self
+        return Span(start + offset, end + offset, style)
+
+### rich.text.Span.right_crop
+def right_crop(self, offset: int) -> "Span":
+        """Crop the span at the given offset.
+
+        Args:
+            offset (int): A value between start and end.
+
+        Returns:
+            Span: A new (possibly smaller) span.
+        """
+        start, end, style = self
+        if offset >= end:
+            return self
+        return Span(start, min(offset, end), style)
