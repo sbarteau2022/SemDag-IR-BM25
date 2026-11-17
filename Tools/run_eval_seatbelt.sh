@@ -64,14 +64,25 @@ meta = {
 Path(out, "run_meta.json").write_text(json.dumps(meta, indent=1))
 PY
 
-# SERVER selects the local model server behind the proxy: mlx_lm (default, verified) or
+# SERVER selects the local model server behind the proxy: mlx_lm (default, verified),
+# omlx (oMLX 0.7.0, verified 2026-11-17: see results/server_bench/NOTES.md) or
 # rapid (rapid-mlx 1.0.0, NOT yet verified: see results/server_bench/NOTES.md). rapid-mlx is closer to
 # the scorer's vLLM: continuous batching, prefix cache, gemma4 tool/reasoning parsers, and
 # a 32,768-token context cap like max_model_len.
 SERVER="${SERVER:-mlx_lm}"
 STARTED_SERVER=0
+MODELS_YAML=Tools/local/models_local_8125.yaml
+[[ "$SERVER" == omlx ]] && MODELS_YAML=Tools/local/models_local_omlx_8125.yaml
 if ! curl -s -m 2 http://127.0.0.1:8124/v1/models >/dev/null; then
-  if [[ "$SERVER" == rapid ]]; then
+  if [[ "$SERVER" == omlx ]]; then
+    # oMLX 0.7.0 serves every model folder under --model-dir; ~/models/omlx_e4b holds only a
+    # symlink to the E4B checkpoint. Its cache goes to a temp dir so ~/.omlx state is untouched.
+    mkdir -p "$HOME/models/omlx_e4b" "$OUT/omlx_cache"
+    ln -sfn "$MODEL" "$HOME/models/omlx_e4b/$(basename "$MODEL")"
+    sandbox-exec -f "$SB" /opt/homebrew/bin/omlx serve --model-dir "$HOME/models/omlx_e4b" \
+      --host 127.0.0.1 --port 8124 --max-concurrent-requests 4 \
+      --paged-ssd-cache-dir "$OUT/omlx_cache" --log-level info >"$OUT/model_server.log" 2>&1 &
+  elif [[ "$SERVER" == rapid ]]; then
     RAPID_MLX_TELEMETRY=0 sandbox-exec -f "$SB" /opt/homebrew/bin/rapid-mlx --no-telemetry \
       --disable-version-check --no-banner serve "$MODEL" --served-model-name "$MODEL" \
       --host 127.0.0.1 --port 8124 --disable-model-downloads --no-spec-decode \
@@ -100,7 +111,7 @@ OPENAI_BASE_URL=http://127.0.0.1:8125/v1 OPENAI_API_KEY=EMPTY TMPDIR="$HARNESS_T
   .venv-harness/bin/swegemma eval \
   --tasks "$TASKS" --snapshots-dir DataSets/public/data/snapshots \
   --submission-dir "$SUB" --results-dir "$OUT" --sandbox docker --concurrency 1 \
-  --task-ids $(cat "$IDS") --models-yaml Tools/local/models_local_8125.yaml \
+  --task-ids $(cat "$IDS") --models-yaml "$MODELS_YAML" \
   --max-tool-calls "$CALLS" --max-time-minutes "$MINS" --max-turns "$TURNS" \
   --timeout-seconds "$TS" --display quiet >>"$OUT/run.log" 2>&1
 RC=$?
