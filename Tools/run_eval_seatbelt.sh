@@ -27,7 +27,7 @@ if [[ "$TASKS" == *local_overlay* ]]; then
   HARNESS_TMP="$HOME/.cache/swegemma_overlay_tmp"; mkdir -p "$HARNESS_TMP"
 fi
 
-export TASKS
+export TASKS SERVER="${SERVER:-mlx_lm}"
 # Refuse to start on a submission the official validator rejects (e.g. a stray __pycache__).
 .venv-harness/bin/python -c "import sys; from pathlib import Path; from adk_submission import validate_directory; from swegemma.config import build_submission_limits; validate_directory(Path(sys.argv[1]), limits=build_submission_limits()[0])" "$SUB" \
   || { echo "submission $SUB fails validation; not starting" >&2; exit 2; }
@@ -51,7 +51,7 @@ meta = {
     "git_head": subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip(),
     "git_dirty": bool(subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout.strip()),
     "sandbox": "docker", "seatbelt": 1, "docker_host": "Docker Desktop",
-    "model": "gemma-4-e4b-it-qat-w4a16-mlx (mlx_lm.server)",
+    "model": "gemma-4-e4b-it-qat-w4a16-mlx", "server": __import__("os").environ.get("SERVER", "mlx_lm"),
     "budget": yaml.safe_load(open(f"{sub}/eval_config.yaml"))["evaluation"],
     "sampling": (yaml.safe_load(open(f"{sub}/configs/sampling.yaml"))
                  if Path(sub, "configs", "sampling.yaml").exists() else
@@ -64,13 +64,28 @@ meta = {
 Path(out, "run_meta.json").write_text(json.dumps(meta, indent=1))
 PY
 
+# SERVER selects the local model server behind the proxy: mlx_lm (default, verified) or
+# rapid (rapid-mlx 1.0.0, NOT yet verified: see results/server_bench/NOTES.md). rapid-mlx is closer to
+# the scorer's vLLM: continuous batching, prefix cache, gemma4 tool/reasoning parsers, and
+# a 32,768-token context cap like max_model_len.
+SERVER="${SERVER:-mlx_lm}"
 STARTED_SERVER=0
 if ! curl -s -m 2 http://127.0.0.1:8124/v1/models >/dev/null; then
-  sandbox-exec -f "$SB" "$ROOT/.venv-mlx/bin/python" -m mlx_lm.server --model "$MODEL" \
-    --host 127.0.0.1 --port 8124 --temp 0.2 --top-p 0.95 --max-tokens 4096 \
-    --chat-template-args '{"enable_thinking": true}' >"$OUT/mlx_server.log" 2>&1 &
+  if [[ "$SERVER" == rapid ]]; then
+    RAPID_MLX_TELEMETRY=0 sandbox-exec -f "$SB" /opt/homebrew/bin/rapid-mlx --no-telemetry \
+      --disable-version-check --no-banner serve "$MODEL" --served-model-name "$MODEL" \
+      --host 127.0.0.1 --port 8124 --disable-model-downloads --no-spec-decode \
+      --enable-auto-tool-choice --tool-call-parser gemma4 --reasoning-parser gemma4 \
+      --context-length 32768 --max-num-seqs 4 --max-concurrent-requests 4 \
+      --enable-prefix-cache --default-temperature 0.2 --default-top-p 0.95 \
+      --log-level INFO >"$OUT/model_server.log" 2>&1 &
+  else
+    sandbox-exec -f "$SB" "$ROOT/.venv-mlx/bin/python" -m mlx_lm.server --model "$MODEL" \
+      --host 127.0.0.1 --port 8124 --temp 0.2 --top-p 0.95 --max-tokens 4096 \
+      --chat-template-args '{"enable_thinking": true}' >"$OUT/model_server.log" 2>&1 &
+  fi
   SERVER_PID=$!; STARTED_SERVER=1
-  for i in {1..120}; do curl -s -m 2 http://127.0.0.1:8124/v1/models >/dev/null && break; sleep 2; done
+  for i in {1..240}; do curl -s -m 2 http://127.0.0.1:8124/v1/models >/dev/null && break; sleep 2; done
 fi
 sandbox-exec -f "$SB" "$ROOT/.venv-harness/bin/python" Tools/telemetry/llm_proxy.py \
   --listen 8125 --upstream 127.0.0.1:8124 --db "$DB" --run-id "$RUN_ID" >"$OUT/llm_proxy.log" 2>&1 &

@@ -44,6 +44,7 @@ class Accumulator:
     def __init__(self, t0: float):
         self.t0 = t0
         self.reasoning: list[str] = []
+        self.reasoning_key = "reasoning"   # echo the server's own field name back
         self.content: list[str] = []
         self.tool_calls: list[dict] = []
         self.finish_reason = None
@@ -66,6 +67,8 @@ class Accumulator:
         for choice in chunk.get("choices") or []:
             delta = choice.get("delta") or {}
             r = delta.get("reasoning") or delta.get("reasoning_content")
+            if delta.get("reasoning_content") and not delta.get("reasoning"):
+                self.reasoning_key = "reasoning_content"
             c = delta.get("content")
             tcs = delta.get("tool_calls") or []
             dt = now - self.t0
@@ -92,7 +95,7 @@ class Accumulator:
     def response(self) -> dict:
         message: dict = {"role": "assistant", "content": "".join(self.content) or None}
         if self.reasoning:
-            message["reasoning"] = "".join(self.reasoning)
+            message[self.reasoning_key] = "".join(self.reasoning)
         if self.tool_calls:
             message["tool_calls"] = self.tool_calls
         out = {

@@ -421,3 +421,11 @@ def test_agent_saw_env_broken(make_run, tmp_path):
         "SELECT instance_id, agent_saw_env_broken, test_env_broken, failure_class FROM tasks")}
     assert got["a"] == (1, 1, "test_env_broken")
     assert got["b"] == (0, 0, "unresolved_unclassified")
+
+
+def test_accumulator_keeps_reasoning_content_field_name():
+    acc = llm_proxy.Accumulator(t0=0.0)
+    acc.feed({"choices": [{"delta": {"reasoning_content": "think"}}]}, 0.1)
+    acc.feed({"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]}, 0.2)
+    msg = acc.response()["choices"][0]["message"]
+    assert msg["reasoning_content"] == "think" and "reasoning" not in msg
