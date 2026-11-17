@@ -25,6 +25,8 @@ Definitions (all per task unless noted):
   ran_tests         a run_command mentioning pytest, or repo_eval.py called with --test
   repro_before_edit a /tmp script written or run before the first successful edit
   destructive_write write_file over an existing source file that the patch then modifies
+  test_env_broken   the grader's test log shows the code under test cannot be imported
+  agent_saw_env_broken  a tool observation inside the agent run showed the same breakage
 """
 
 from __future__ import annotations
@@ -47,6 +49,12 @@ BUILTIN_TOOLS = {
     "load_skill", "load_skill_resource", "run_skill_script",
 }
 MISSING_DEP = re.compile(r"No module named '(inline_snapshot|dirty_equals)'")
+# Grading environment cannot import the code under test, whatever the patch does.
+# The pydantic case: the public wheel cache ships pydantic_core 2.46.4 for x86_64 only, so an
+# arm64 (Apple silicon) sandbox image ends up with a newer pydantic-core that pydantic rejects.
+ENV_BROKEN = re.compile(
+    r"No module named '(inline_snapshot|dirty_equals)'"
+    r"|installed pydantic-core version \(\S+\) is incompatible with the current pydantic version")
 TEST_PATH = re.compile(r"(^|/)(tests?|testing)/|(^|/)test_[^/]*\.py$|_test\.py$|(^|/)conftest\.py$")
 DIFF_FILE = re.compile(r"^diff --git a/\S+ b/(\S+)|^\+\+\+ b/(\S+)", re.M)
 
@@ -99,17 +107,21 @@ def count_tokens(tok, text: str) -> int | None:
 
 
 def classify(t: dict) -> str:
-    """Single failure class, first match wins. Resolved tasks are 'resolved'."""
+    """Single failure class, first match wins. Resolved tasks are 'resolved'.
+
+    `test_env_broken` comes right after `resolved`: if the grader cannot import the code
+    under test, the task is not a measurement of the agent, whatever else happened.
+    """
     if t["resolved"]:
         return "resolved"
+    if t.get("test_env_broken") or t.get("test_env_missing_dep"):
+        return "test_env_broken"
     if t["error"] and "timeout" in t["error"].lower():
         return "timeout"
     if t["error"]:
         return "harness_error"
     if not t["patch_bytes"]:
         return "no_patch"
-    if t["test_env_missing_dep"]:
-        return "test_env_missing_dep"
     if t.get("destructive_write"):
         return "destructive_write"
     if t["touched_gold_file"] is None:
@@ -144,6 +156,7 @@ def ingest_task(con, run_id, rd: Path, r: dict, gold: dict, tok, budget, functio
     first_edit_s = None
     repro_before_edit = 0
     written_paths: set[str] = set()
+    agent_saw_env_broken = 0
     open_agent_tool = None  # (seq) of the root agent_tool call collecting nested steps
     nested: dict[int, int] = {}
     ts_all = []
@@ -184,6 +197,8 @@ def ingest_task(con, run_id, rd: Path, r: dict, gold: dict, tok, budget, functio
 
         tcs = s.get("tool_calls") or []
         obs = parse_obs(s.get("observation"))
+        if tcs and ENV_BROKEN.search(str((s.get("observation") or {}).get("content") or "")):
+            agent_saw_env_broken = 1
         first_tc = tcs[0] if tcs else {}
         tdb.insert(con, "steps", {
             "run_id": run_id, "instance_id": iid, "step_id": s.get("step_id"),
@@ -282,6 +297,8 @@ def ingest_task(con, run_id, rd: Path, r: dict, gold: dict, tok, budget, functio
         "gold_functions": json.dumps(gf) if gf is not None else None,
         "touched_gold_function": touched_fn,
         "test_env_missing_dep": int(bool(MISSING_DEP.search(test_log))),
+        "test_env_broken": int(bool(ENV_BROKEN.search(test_log))),
+        "agent_saw_env_broken": agent_saw_env_broken,
         # whole-file overwrite of a source file the patch then modifies (not a new file)
         "destructive_write": int(any(w in edited and "new file mode" not in _file_block(patch, w)
                                      for w in written_paths)),

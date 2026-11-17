@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   first_edit_s REAL, ran_tests INTEGER, repro_before_edit INTEGER,
   edited_files TEXT, gold_files TEXT, touched_gold_file INTEGER,
   edited_functions TEXT, gold_functions TEXT, touched_gold_function INTEGER,
-  test_env_missing_dep INTEGER, destructive_write INTEGER,
+  test_env_missing_dep INTEGER, test_env_broken INTEGER, agent_saw_env_broken INTEGER,
+  destructive_write INTEGER,
   failure_class TEXT,
   t_start REAL, t_end REAL,
   PRIMARY KEY (run_id, instance_id)
@@ -109,7 +110,8 @@ CREATE VIEW IF NOT EXISTS v_thinking_budget AS
 
 # Columns added after a table first shipped: (table, column, type). connect() adds any that
 # an existing database lacks, so older stores keep working without a rebuild.
-MIGRATIONS = [("tasks", "destructive_write", "INTEGER")]
+MIGRATIONS = [("tasks", "destructive_write", "INTEGER"), ("tasks", "test_env_broken", "INTEGER"),
+              ("tasks", "agent_saw_env_broken", "INTEGER")]
 
 _LOCK = threading.Lock()
 

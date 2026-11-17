@@ -203,7 +203,8 @@ def test_empty_gold_is_unknown_not_wrong_file(make_run, tmp_path):
     ({"error": "Agent exceeded session timeout (5 min)"}, "timeout"),
     ({"error": "boom"}, "harness_error"),
     ({"patch_bytes": 0}, "no_patch"),
-    ({"test_env_missing_dep": 1}, "test_env_missing_dep"),
+    ({"test_env_missing_dep": 1}, "test_env_broken"),
+    ({"test_env_broken": 1, "error": "Agent exceeded session timeout"}, "test_env_broken"),
     ({"destructive_write": 1, "touched_gold_file": 1}, "destructive_write"),
     ({"touched_gold_file": 0}, "wrong_file"),
     ({"touched_gold_file": 1, "touched_gold_function": 0}, "right_file_wrong_function"),
@@ -282,7 +283,7 @@ def test_ingest_end_to_end(make_run, tmp_path):
     assert ok["thinking_tokens"] is None        # no tokenizer given
     assert ok["thinking_chars"] == len("plan the fix" "edit" "retry" "ask helper" "sub think")
     assert t["t_wrong"]["failure_class"] == "wrong_file"
-    assert t["t_dep"]["failure_class"] == "test_env_missing_dep"
+    assert t["t_dep"]["failure_class"] == "test_env_broken"
     assert t["t_none"]["failure_class"] == "no_patch" and t["t_none"]["steps"] == 0
 
     nested = con.execute("SELECT name, nested_steps, depth FROM tool_calls "
@@ -396,3 +397,27 @@ def test_migration_adds_column_to_old_store(tmp_path):
     con.commit(); con.close()
     cols = {r[1] for r in tdb.connect(p).execute("PRAGMA table_info(tasks)")}
     assert "destructive_write" in cols
+
+
+def test_env_broken_pydantic_core_mismatch():
+    log = ("E   SystemError: The installed pydantic-core version (2.50.4) is incompatible with "
+           "the current pydantic version, which requires 2.46.4.")
+    assert ingest.ENV_BROKEN.search(log)
+    assert not ingest.ENV_BROKEN.search("E   AssertionError: assert 1 == 2\n1 failed, 7 passed")
+
+
+def test_agent_saw_env_broken(make_run, tmp_path):
+    bad = {"status": "ok", "stdout": "E   SystemError: The installed pydantic-core version (2.50.4) "
+           "is incompatible with the current pydantic version, which requires 2.46.4."}
+    rd = make_run("r", [
+        {"instance_id": "a", "steps": [step(1, tool="run_command", args={"command": "pytest"}, obs=bad)],
+         "patch": diff("src/a.py"), "test_log": bad["stdout"]},
+        {"instance_id": "b", "steps": [step(1, tool="run_command", args={"command": "pytest"})],
+         "patch": diff("src/a.py"), "test_log": "1 failed"},
+    ])
+    dbp = tmp_path / "t.sqlite"
+    ingest.ingest_run(dbp, rd, "R")
+    got = {r[0]: tuple(r[1:]) for r in tdb.connect(dbp).execute(
+        "SELECT instance_id, agent_saw_env_broken, test_env_broken, failure_class FROM tasks")}
+    assert got["a"] == (1, 1, "test_env_broken")
+    assert got["b"] == (0, 0, "unresolved_unclassified")
