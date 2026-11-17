@@ -30,3 +30,11 @@ def test_per_task_budget_fits_12h_unless_local_only(sub):
         assert "NEVER ZIP" in text, f"{sub.name}: local-only arm must be labelled"
     else:
         assert minutes <= MAX_MINUTES, f"{sub.name}: {minutes} min/task can exceed 12 h"
+
+
+@pytest.mark.parametrize("sub", SUBS, ids=lambda p: p.name)
+def test_official_validator_accepts_every_submission(sub):
+    """Catches stray files (e.g. __pycache__/*.pyc written by a test run) before a live run does."""
+    from adk_submission import validate_directory
+    from swegemma.config import build_submission_limits
+    validate_directory(sub, limits=build_submission_limits()[0])

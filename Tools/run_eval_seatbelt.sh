@@ -28,6 +28,9 @@ if [[ "$TASKS" == *local_overlay* ]]; then
 fi
 
 export TASKS
+# Refuse to start on a submission the official validator rejects (e.g. a stray __pycache__).
+.venv-harness/bin/python -c "import sys; from pathlib import Path; from adk_submission import validate_directory; from swegemma.config import build_submission_limits; validate_directory(Path(sys.argv[1]), limits=build_submission_limits()[0])" "$SUB" \
+  || { echo "submission $SUB fails validation; not starting" >&2; exit 2; }
 read -r TS CALLS MINS TURNS <<<"$(.venv-harness/bin/python - "$SUB" <<'PY'
 import sys, yaml
 e = yaml.safe_load(open(f"{sys.argv[1]}/eval_config.yaml"))["evaluation"]

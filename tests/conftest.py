@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+# Never write bytecode while testing: a __pycache__ inside an AgenticSubmission folder makes
+# the harness reject the submission (.pyc is a disallowed extension). run_14 lost 3 tasks this way.
+sys.dont_write_bytecode = True
+os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
 
 ROOT = Path(__file__).resolve().parents[1]
 for p in (ROOT / "Tools", ROOT / "Tools" / "telemetry"):
