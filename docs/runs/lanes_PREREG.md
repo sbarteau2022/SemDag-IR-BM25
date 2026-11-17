@@ -35,3 +35,9 @@ Each lane is 1 control (v6 resolved it) + 4 tasks covering run_10's failure clas
   - the PLAN block is missing in more than half the rounds;
   - `meta.py` or `audit.py` returns `error`;
   - any task exceeds 32,768 prompt tokens.
+
+## Amendment 2026-11-17 (before run_15)
+
+- run_13: null (wiring, `top_k` float). run_14: null. 3 of 5 tasks were rejected by the harness because `__pycache__` was written into v7 by a test run during the lane; the 2 valid tasks are kept as diagnostics only. Both stay in the failure ledger.
+- The requests lane is redone in full as **run_15** (same 5 tasks, v7 at commit `2c34a93`). Guards now in place: the tests never write bytecode, the official validator is run on every submission in the suite, and the runner refuses an invalid submission.
+- The "ref" column is v6's earlier run_10 result on the same tasks; it is a reference, not a run of v6.
