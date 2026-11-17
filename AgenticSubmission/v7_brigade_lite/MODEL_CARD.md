@@ -10,7 +10,7 @@
 
 | Role | Sees | Tools | Sampling | What the model sees per tool, and cost |
 |---|---|---|---|---|
-| planner (think lane) | harness task prompt (round 1) or the last verdict; `{plan?}`, `{verdict?}` | `run_skill_script` (meta.py, round 1 only), `read_file` (≤ 2) | temp 1.0, top_k 64, top_p 0.95, presence 0.3, frequency 0.2, thinking 4096, output ≤ 6144 | meta.py report ≤ 6,000 chars (~2k tokens); `read_file` ≤ 150 lines |
+| planner (think lane) | harness task prompt (round 1) or the last verdict; `{plan?}`, `{verdict?}` | `run_skill_script` (meta.py, round 1 only), `read_file` (≤ 2) | temp 1.0, top_p 0.95 (top_k left to the model default, 64), presence 0.3, frequency 0.2, thinking 4096, output ≤ 6144 | meta.py report ≤ 6,000 chars (~2k tokens); `read_file` ≤ 150 lines |
 | executor (code lane) | the planner's PLAN message | `read_file`, `edit_file`, `run_command`, `run_skill_script` (fix_edit.py); no `write_file` | temp 0.0, top_p 1.0, no penalties, thinking 1024, output ≤ 4096 | tool outputs ≤ 5,000 chars each; ≤ 10 calls |
 | auditor | the executor's DONE line; `{plan?}` | `run_skill_script` (audit.py), `submit_patch`, `get_status` | temp 0.0, thinking off, output ≤ 1024 | audit verdict ≤ 2,600 chars |
 

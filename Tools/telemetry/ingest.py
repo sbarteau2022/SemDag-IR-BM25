@@ -368,6 +368,10 @@ def ingest_run(db_path, results_dir, run_id, arm=None, tasks_path=None, tokenize
     meta = json.loads((rd / "run_meta.json").read_text()) if (rd / "run_meta.json").exists() else {}
     sampling = meta.get("sampling") or {}
     budget = (sampling.get("thinking_config") or {}).get("thinking_budget")
+    if budget is None:  # per-role sampling files: flag against the largest role budget
+        budgets = [(c.get("thinking_config") or {}).get("thinking_budget")
+                   for c in sampling.values() if isinstance(c, dict)]
+        budget = max((b for b in budgets if b), default=None)
     gold = {}
     if tasks_path and Path(tasks_path).exists():
         for line in Path(tasks_path).read_text().splitlines():

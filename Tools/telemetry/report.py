@@ -39,6 +39,9 @@ def build(con, run_id: str) -> str:
         "SELECT thinking_tokens FROM steps WHERE run_id=? AND event_type='thinking'", (run_id,))]
     sampling = json.loads(run["sampling_json"] or "{}") if run else {}
     budget = (sampling.get("thinking_config") or {}).get("thinking_budget")
+    if budget is None:  # per-role sampling files
+        budget = max(((c.get("thinking_config") or {}).get("thinking_budget") or 0
+                      for c in sampling.values() if isinstance(c, dict)), default=None) or None
 
     n = len(tasks)
     res = sum(t["resolved"] for t in tasks)

@@ -40,7 +40,10 @@ meta = {
     "sandbox": "docker", "seatbelt": 1, "docker_host": "Docker Desktop",
     "model": "gemma-4-e4b-it-qat-w4a16-mlx (mlx_lm.server)",
     "budget": yaml.safe_load(open(f"{sub}/eval_config.yaml"))["evaluation"],
-    "sampling": yaml.safe_load(open(f"{sub}/configs/sampling.yaml")),
+    "sampling": (yaml.safe_load(open(f"{sub}/configs/sampling.yaml"))
+                 if Path(sub, "configs", "sampling.yaml").exists() else
+                 {p.stem.removeprefix("sampling_"): yaml.safe_load(p.read_text())
+                  for p in sorted(Path(sub, "configs").glob("sampling*.yaml"))}),
     "task_ids_file": ids, "task_ids": Path(ids).read_text().split(),
     "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     "notes": "local MLX stand-in: thinking_budget not enforced, no events compaction",
