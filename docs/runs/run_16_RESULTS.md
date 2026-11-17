@@ -20,8 +20,9 @@ Time share by role: planner 33%, executor 63%, auditor 4%.
 ## Findings
 
 1. **Repetition collapse spreads through the roles.** The planner's text reaches the executor and auditor through `{plan?}` and the shared conversation, and both copied the loop. All 3 `finish_reason=length` calls in run_16 came from this one task. run_15 had 0 such calls.
-   - oMLX 0.7.0 does accept per-request `presence_penalty` and `frequency_penalty` (`omlx/server.py:1711-1714`).
-   - A frequency penalty of 0.2 would break a 3-line loop after a few dozen repeats. So it is **unverified** whether ADK/LiteLLM actually sends the penalties from `sampling_think.yaml`. Check the request body before changing any values.
+   - ADK forwards both penalties: `google/adk/models/lite_llm.py` passes `presence_penalty` and `frequency_penalty` through to LiteLLM. oMLX 0.7.0 accepts both per request (`omlx/server.py:1711-1714`).
+   - **Local fidelity gap.** oMLX applies them through mlx_lm `make_logits_processors`, whose `presence_context_size` and `frequency_context_size` default to **20 tokens** (`mlx_lm/sample_utils.py:76-82, 309`). The loop period here is about 20 tokens or more, so the local penalty barely sees one repeat. vLLM counts penalties over all generated tokens, so the scorer's planner should be less prone to this loop.
+   - This is inferred from source code; no live check on the scorer has been run. Local runs therefore overstate repetition collapse. A cheap safeguard that holds on both servers: lower the planner's `max_output_tokens` (6144 now) so that a loop costs less.
 2. **Revise rounds do not fit the 5-minute task cap.** In 3052 and 3180 the edits went through and audit asked for a revision, but the timer ran out before a second executor pass. Combined with run_15, 5 of 10 lane tasks timed out.
 3. As in run_15, the repro counter (`/tmp` only) shows 0, and context is not the limit (peak 15–61%).
 
