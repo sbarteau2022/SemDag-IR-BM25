@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   first_edit_s REAL, ran_tests INTEGER, repro_before_edit INTEGER,
   edited_files TEXT, gold_files TEXT, touched_gold_file INTEGER,
   edited_functions TEXT, gold_functions TEXT, touched_gold_function INTEGER,
-  test_env_missing_dep INTEGER,
+  test_env_missing_dep INTEGER, destructive_write INTEGER,
   failure_class TEXT,
   t_start REAL, t_end REAL,
   PRIMARY KEY (run_id, instance_id)
@@ -107,6 +107,10 @@ CREATE VIEW IF NOT EXISTS v_thinking_budget AS
   WHERE s.event_type = 'thinking';
 """
 
+# Columns added after a table first shipped: (table, column, type). connect() adds any that
+# an existing database lacks, so older stores keep working without a rebuild.
+MIGRATIONS = [("tasks", "destructive_write", "INTEGER")]
+
 _LOCK = threading.Lock()
 
 
@@ -117,6 +121,10 @@ def connect(path: str | Path) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript(SCHEMA)
+    for table, column, ctype in MIGRATIONS:
+        have = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+        if column not in have:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ctype}")
     con.execute(
         "INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)",
         (str(SCHEMA_VERSION),),

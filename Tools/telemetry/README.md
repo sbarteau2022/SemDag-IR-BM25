@@ -31,7 +31,8 @@ Store: `results/telemetry.sqlite` (git-ignored via `results/*.sqlite*`).
 | TTFT | `llm_calls.ttft_s`, `t_first_reasoning_s`, `t_first_action_s`, `decode_tok_per_s` | seconds from the proxy receiving the request |
 | Steps within a tool call | `tool_calls.nested_steps`, `depth`, `tasks.subagent_steps` | sub-agent steps between an `agent_tool` call and the root agent's next step |
 | Steps for the whole task | `tasks.steps`, `agent_steps`, `nudges` | trace steps |
-| Failure class | `tasks.failure_class` | first match: timeout, harness_error, no_patch, test_env_missing_dep, wrong_file, right_file_wrong_function, right_function_wrong_fix, right_file_unresolved |
+| Failure class | `tasks.failure_class` | first match: timeout, harness_error, no_patch, test_env_missing_dep, unresolved_unclassified (gold unknown), wrong_file, right_file_wrong_function, right_function_wrong_fix, right_file_unresolved (no function match run) |
+| Tool-call counts | `tasks.tool_calls` vs `harness_tool_calls` | ours counts every call including the free `submit_patch`/`get_status`; the harness count excludes them |
 
 ## Use
 

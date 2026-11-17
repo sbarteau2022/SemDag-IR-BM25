@@ -179,16 +179,37 @@ def test_patch_files_drops_tests():
     assert ingest.patch_files("") == []
 
 
+def test_patch_files_reads_headerless_gold_patch():
+    # public tasks.jsonl gold patches start at '--- a/' with no 'diff --git' header
+    gold = ("--- a/src/pkg/_types.py\n+++ b/src/pkg/_types.py\n@@ -1 +1 @@\n-a\n+b\n"
+            "--- a/src/pkg/models.py\n+++ b/src/pkg/models.py\n@@ -1 +1 @@\n-a\n+b\n"
+            "--- a/old.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-a\n")
+    assert ingest.patch_files(gold) == ["src/pkg/_types.py", "src/pkg/models.py"]
+    # a diff --git block also carries a +++ line: no duplicates
+    assert ingest.patch_files(diff("src/a.py")) == ["src/a.py"]
+
+
+def test_empty_gold_is_unknown_not_wrong_file(make_run, tmp_path):
+    rd = make_run("r", [{"instance_id": "t", "steps": [], "patch": diff("src/a.py")}])
+    tasks = _tasks_jsonl(tmp_path, {"t": ""})
+    dbp = tmp_path / "t.sqlite"
+    ingest.ingest_run(dbp, rd, "R", tasks_path=tasks)
+    row = tdb.connect(dbp).execute("SELECT touched_gold_file, failure_class FROM tasks").fetchone()
+    assert tuple(row) == (None, "unresolved_unclassified")
+
+
 @pytest.mark.parametrize("row,cls", [
     ({"resolved": 1}, "resolved"),
     ({"error": "Agent exceeded session timeout (5 min)"}, "timeout"),
     ({"error": "boom"}, "harness_error"),
     ({"patch_bytes": 0}, "no_patch"),
     ({"test_env_missing_dep": 1}, "test_env_missing_dep"),
+    ({"destructive_write": 1, "touched_gold_file": 1}, "destructive_write"),
     ({"touched_gold_file": 0}, "wrong_file"),
     ({"touched_gold_file": 1, "touched_gold_function": 0}, "right_file_wrong_function"),
     ({"touched_gold_file": 1, "touched_gold_function": 1}, "right_function_wrong_fix"),
     ({"touched_gold_file": 1}, "right_file_unresolved"),
+    ({}, "unresolved_unclassified"),
 ])
 def test_classify_order(row, cls):
     base = {"resolved": 0, "error": None, "patch_bytes": 10, "test_env_missing_dep": 0,
@@ -335,10 +356,43 @@ def test_export_and_report(make_run, tmp_path):
     assert any(l["thinking_text"] == "plan the fix" for l in lines)
 
     md = report.build(tdb.connect(dbp), "R1")
-    assert "Resolved 0/4" in md and "| edit_file |" in md and "right_file_unresolved" in md
+    assert "Resolved 0/4" in md and "| edit_file |" in md and "unresolved_unclassified" in md
     assert "Model calls (proxy)" not in md      # no proxy rows for this run
 
 
 def test_report_percentile_helpers():
     assert report.pct([3, None, 1, 2], 0.5) == 2 and report.pct([], 0.5) is None
     assert report.fmt(None) == "-" and report.fmt(1.234) == "1.23" and report.fmt(3) == "3"
+
+
+def test_destructive_write_vs_new_file(make_run, tmp_path):
+    new_file = ("diff --git a/src/new.py b/src/new.py\nnew file mode 100644\n--- /dev/null\n"
+                "+++ b/src/new.py\n@@ -0,0 +1 @@\n+x\n")
+    rd = make_run("r", [
+        {"instance_id": "over", "steps": [step(1, tool="write_file",
+                                               args={"filepath": "/workspace/src/a.py"})],
+         "patch": diff("src/a.py")},
+        {"instance_id": "new", "steps": [step(1, tool="write_file",
+                                              args={"filepath": "src/new.py"})],
+         "patch": new_file},
+        {"instance_id": "tmp", "steps": [step(1, tool="write_file",
+                                              args={"filepath": "/tmp/repro.py"})],
+         "patch": diff("src/a.py")},
+    ])
+    tasks = _tasks_jsonl(tmp_path, {k: diff("src/a.py") for k in ("over", "new", "tmp")})
+    dbp = tmp_path / "t.sqlite"
+    ingest.ingest_run(dbp, rd, "R", tasks_path=tasks)
+    got = {r[0]: (r[1], r[2]) for r in tdb.connect(dbp).execute(
+        "SELECT instance_id, destructive_write, failure_class FROM tasks")}
+    assert got["over"] == (1, "destructive_write")
+    assert got["new"] == (0, "wrong_file")
+    assert got["tmp"] == (0, "right_file_unresolved")
+
+
+def test_migration_adds_column_to_old_store(tmp_path):
+    p = tmp_path / "old.sqlite"
+    con = sqlite3.connect(p)
+    con.execute("CREATE TABLE tasks (run_id TEXT, instance_id TEXT, PRIMARY KEY (run_id, instance_id))")
+    con.commit(); con.close()
+    cols = {r[1] for r in tdb.connect(p).execute("PRAGMA table_info(tasks)")}
+    assert "destructive_write" in cols

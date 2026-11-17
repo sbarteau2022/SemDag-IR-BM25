@@ -24,6 +24,7 @@ Definitions (all per task unless noted):
   compactions       steps with event_type == "compaction" (only when compaction is configured)
   ran_tests         a run_command mentioning pytest, or repo_eval.py called with --test
   repro_before_edit a /tmp script written or run before the first successful edit
+  destructive_write write_file over an existing source file that the patch then modifies
 """
 
 from __future__ import annotations
@@ -47,13 +48,18 @@ BUILTIN_TOOLS = {
 }
 MISSING_DEP = re.compile(r"No module named '(inline_snapshot|dirty_equals)'")
 TEST_PATH = re.compile(r"(^|/)(tests?|testing)/|(^|/)test_[^/]*\.py$|_test\.py$|(^|/)conftest\.py$")
-DIFF_FILE = re.compile(r"^diff --git a/(\S+) b/(\S+)", re.M)
+DIFF_FILE = re.compile(r"^diff --git a/\S+ b/(\S+)|^\+\+\+ b/(\S+)", re.M)
 
 
 def patch_files(patch: str) -> list[str]:
-    """Non-test files touched by a unified diff."""
+    """Non-test files touched by a unified diff.
+
+    Reads both `diff --git a/X b/Y` headers (agent patches) and `+++ b/Y` lines (the public
+    tasks' gold patches have no git header). Deleted files (`+++ /dev/null`) do not match.
+    """
     files = []
-    for _a, b in DIFF_FILE.findall(patch or ""):
+    for git_b, plus_b in DIFF_FILE.findall(patch or ""):
+        b = git_b or plus_b
         if not TEST_PATH.search(b) and b not in files:
             files.append(b)
     return files
@@ -104,6 +110,10 @@ def classify(t: dict) -> str:
         return "no_patch"
     if t["test_env_missing_dep"]:
         return "test_env_missing_dep"
+    if t.get("destructive_write"):
+        return "destructive_write"
+    if t["touched_gold_file"] is None:
+        return "unresolved_unclassified"
     if t["touched_gold_file"] == 0:
         return "wrong_file"
     if t["touched_gold_function"] == 0:
@@ -133,6 +143,7 @@ def ingest_task(con, run_id, rd: Path, r: dict, gold: dict, tok, budget, functio
                sub_steps=0, compactions=0, nudges=0, agent_steps=0, ran_tests=0)
     first_edit_s = None
     repro_before_edit = 0
+    written_paths: set[str] = set()
     open_agent_tool = None  # (seq) of the root agent_tool call collecting nested steps
     nested: dict[int, int] = {}
     ts_all = []
@@ -205,6 +216,9 @@ def ingest_task(con, run_id, rd: Path, r: dict, gold: dict, tok, budget, functio
                     agg["edit_errors"] += 1
             if name == "write_file":
                 agg["writes"] += 1
+                fp = str(args.get("filepath") or "")
+                if fp and not fp.startswith("/tmp"):
+                    written_paths.add(fp.lstrip("/").removeprefix("workspace/"))
             if name in ("run_skill_script", "load_skill", "load_skill_resource"):
                 agg["skills"] += 1
             argtext = json.dumps(args)
@@ -236,7 +250,7 @@ def ingest_task(con, run_id, rd: Path, r: dict, gold: dict, tok, budget, functio
 
     edited = patch_files(patch)
     g = gold.get(iid) or {}
-    gfiles = g.get("files")
+    gfiles = g.get("files") or None  # empty gold file list means unknown, not "no file"
     touched_file = None if gfiles is None or not edited else int(bool(set(edited) & set(gfiles)))
     ef = gf = None
     touched_fn = None
@@ -268,11 +282,23 @@ def ingest_task(con, run_id, rd: Path, r: dict, gold: dict, tok, budget, functio
         "gold_functions": json.dumps(gf) if gf is not None else None,
         "touched_gold_function": touched_fn,
         "test_env_missing_dep": int(bool(MISSING_DEP.search(test_log))),
+        # whole-file overwrite of a source file the patch then modifies (not a new file)
+        "destructive_write": int(any(w in edited and "new file mode" not in _file_block(patch, w)
+                                     for w in written_paths)),
         "t_start": min(ts_all) if ts_all else None, "t_end": max(ts_all) if ts_all else None,
     }
     row["failure_class"] = classify(row)
     tdb.insert(con, "tasks", row)
     return row
+
+
+def _file_block(patch: str, path: str) -> str:
+    """The part of a unified diff that belongs to one file (empty if absent)."""
+    start = patch.find(f"diff --git a/{path} b/{path}")
+    if start < 0:
+        return ""
+    nxt = patch.find("\ndiff --git ", start + 1)
+    return patch[start:] if nxt < 0 else patch[start:nxt]
 
 
 def function_match(iid: str, patch: str, gold_patch: str):
