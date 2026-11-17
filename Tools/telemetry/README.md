@@ -1,6 +1,6 @@
 # Telemetry: local harness runs → SQLite
 
-Status: **COMPONENT-TESTED** (39 tests in `tests/`) and **LIVE-MEASURED** on run_11 (proxy equivalence gate passed against `mlx_lm.server` 0.32.2, 2026-11-17).
+Status: **COMPONENT-TESTED** (`tests/test_telemetry.py`, part of the 63-test suite) and **LIVE-MEASURED** on run_11. The proxy equivalence gate passed against `mlx_lm.server` 0.32.2, and all preregistered falsifiers passed (`docs/runs/run_11_RESULTS.md`).
 
 Lightweight by design. During a run, the only extra work is one Python proxy that relays model calls and writes one SQLite row per call. Tokenizing, trace parsing, failure classes, reports and the Docker image all happen **after** the harness exits.
 
@@ -24,7 +24,7 @@ Store: `results/telemetry.sqlite` (git-ignored via `results/*.sqlite*`).
 | Need | Where | Definition |
 |---|---|---|
 | Token consumption | `steps`, `tasks`, `llm_calls` | prompt / completion / cached tokens per model step, per task, per call |
-| Tool calls pass / fail | `tool_calls`, view `v_tool_pass_fail` | `ok` = observation `status != "error"`; shell exit codes kept separately |
+| Tool calls pass / fail | `tool_calls`, view `v_tool_pass_fail` | `ok` = observation `status != "error"`. For `run_command` the harness reports a nonzero exit (e.g. failing pytest) as `CommandError`, so read `run_command` failures as "command exited nonzero", not tool malfunction |
 | Thinking budget vs use | `steps.thinking_tokens`, view `v_thinking_budget` | thinking text re-tokenized with the model tokenizer vs `thinking_budget` (scorer enforces it; local MLX does not) |
 | Reasoning traces per step | `steps.thinking_text`, `tool_name`, `tool_args`, `observation`; `steps.jsonl` in the image | verbatim from the harness trace |
 | Context budget | `steps.context_frac`, `tasks.peak_context_frac`, `compactions` | prompt tokens / 32,768 |

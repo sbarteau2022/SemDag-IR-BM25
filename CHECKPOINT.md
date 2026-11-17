@@ -1,49 +1,76 @@
-# CHECKPOINT: 2026-11-12, SemDAG repair
+# CHECKPOINT: 2026-11-17, v6 baseline + telemetry
 
-Resume point for the next session. Rules and layout are in [AGENTS.md](AGENTS.md).
+Resume point for the next session. Rules and layout: [AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md). Audit of the space: `Designs/AUDIT_2026-11-17.md`.
 
-## Current priority
+## Dates
 
-- Paper draft: `PaperTrack/Paper_SemDAG.md`, rewritten around the corrected
-  result: source retrieval supplies query relevance; a light typed SemDAG walk
-  is statistically level at function localization and improves file context.
-- Production candidate: `AgenticSubmission/v4_semdag/`. Directory validation,
-  adversarial contracts, full 129-task offline localization, full-snapshot
-  parity, and a real Requests snapshot smoke pass.
-- Historical agent evidence remains `v0_baseline` versus `v2_bm25`; Axe 4 reads
-  the real traces. No paired agent run of `v4_semdag` exists yet.
-- No Kaggle submission has been made. The Paper Track deadline is today,
-  November 12, 2026 at 11:59 PM UTC.
+- Entry and rules acceptance: **Nov 25** (by hand, owner).
+- Final submission and Small Model bonus: **Dec 2**, 23:59 UTC.
+- No Kaggle submission has been made yet. The Paper Track deadline (Nov 12) has passed.
 
-## Done
-- Workspace folders created. Rules audited: `Rules/Overview/Competition_Audit.md`, `Evaluation_Rules_Full.md`, `Model_Choice.md`.
-- Dataset downloaded (22 GB zip verified), extracted to `DataSets/public/data/` (129 tasks, snapshots, graphs, embeddings, 124 wheels).
-- Docker image `swebench-sandbox:latest` built and smoke-tested (Python 3.13, git, pytest, shims, wheels).
-- swegemma 0.2.11, adk_submission 0.2.13, adk_eval_core 0.1.0 installed in `.venv-harness`. `swegemma eval --help` works.
-- Baseline submission `AgenticSubmission/v0_baseline/` (E4B, full official `system.md`, no adapters) passes `validate_directory`.
-- CUDA checkpoint converted losslessly to MLX 4-bit: `~/models/gemma-4-e4b-it-qat-w4a16-mlx`. Generates correct code; tool calls parse.
-- Local server `Tools/serve_e4b_mlx.sh` on `127.0.0.1:8123` (temp 0.2, top_p 0.95, max tokens 4096). Last seen running.
-- Zed: provider `gemma4-e4b-mlx` and agent profile `gemma4-competition` (tools: terminal, read_file, edit_file, write_file; reasoning effort low). Settings backups sit beside `~/.config/zed/settings.json`.
-- Memory notes saved in the Claude project memory folder (decisions, status, forum findings).
+## Agent versions
 
-## Not done / blocked
-- `v4_semdag` has not run through the model harness. Its present evidence is
-  offline localization, parity, package validation, adversarial checks, and a
-  direct real-snapshot runtime smoke.
-- Thinking budget (4096) can't be enforced locally; `mlx-lm` has no equivalent. A small proxy was offered, not built.
-- Paper Track: corrected measured draft exists at `PaperTrack/Paper_SemDAG.md`;
-  public notebook URL and submission remain open.
-- No LoRA adapter for E4B exists. Training must run on a Kaggle L4x4 notebook.
-- Small Model Prize deadline unconfirmed.
-- Chrome extension was not connected; the built-in browser (logged in to Kaggle) worked.
+| Version | State | Evidence |
+|---|---|---|
+| `v0_baseline` | Stock reference. Its `eval_config` is the 1 min / 10-call sample: **never zip it** | 4/23 on paired23 |
+| `v2_bm25` | Valid | 7/23 on paired23 |
+| `v4_semdag` | Valid, now 5 min/task (was 8) | offline localization only |
+| `v6_impact` | **Frozen reference** | **7/23 on paired23** (run_10, same 7 as v2, 25% faster) |
+| `v6_1_budget` | **Current** = v6 + `max_output_tokens` 8192 | run_11, see below |
 
-## Plan (go big)
-1. Finalize the paper artifact and replace its public-notebook placeholder.
-2. Run `v4_semdag` and `v2_bm25` on identical tasks, then analyze both with Axe 4.
-3. Improve edit application and targeted behavioral verification, the current
-   downstream bottlenecks.
-4. Submit only after explicit user approval.
+Canonical budget (v6.1):
+- `eval_config`: `timeout_seconds 120 / max_tool_calls 40 / max_time_minutes 5 / max_turns 60`.
+- Sampling: temp 0.2, top_p 0.95, max_output 8192, thinking_budget 4096, include_thoughts true.
+- Tasks that hit the cap end about 30 s late, so plan the 12 h budget at 5.5 min per task.
 
-## Open questions for the user
-- Whether to prioritize the Paper Track submission or a paired `v4_semdag`
-  harness run before the deadline.
+## Measured state (LIVE-MEASURED, local MLX stand-in)
+
+- **run_10** (v6, paired23):
+  - 7 resolved, 8 right_function_wrong_fix, 4 right_file_wrong_function, 2 destructive_write, 2 wrong_file.
+  - `edit_file` 7/42 failed.
+- **run_11** (v6.1, 25 unseen fastapi+rich tasks, no-network seatbelt):
+  - 1/25 resolved. 15 fastapi tasks were ungradable locally (environment defect below).
+  - `edit_file` failed 30/65, 25 of them "old_string not found".
+  - 0/25 reproduced the bug before editing.
+  - Peak context max 99%.
+  - Details: `docs/runs/run_11_RESULTS.md`.
+- **Local environment defect:**
+  - The arm64 sandbox image gets pydantic-core 2.50.4 while pydantic needs 2.46.4, whose cached wheel is x86_64-only. So all 67 fastapi tasks fail to import locally; the scorer (x86_64) is unaffected.
+  - Until it is fixed, local evaluation covers rich + requests + httpx (62 tasks).
+
+## Tooling now in place
+
+- `Tools/telemetry/` (README there):
+  - A timing proxy (TTFT, decode tok/s, per call).
+  - A SQLite store: tokens, tool pass/fail, thinking vs budget, context, nested sub-agent steps, failure classes.
+  - Per-run report, export, and a baked Docker image per run.
+  - Proxy equivalence gate passed against `mlx_lm.server`.
+- `Tools/run_eval_seatbelt.sh` + `Tools/seatbelt/no_network.sb`:
+  - Scored-style local runs with no network.
+  - Always uses Docker Desktop, never Colima.
+  - Reads the budget from the submission's `eval_config.yaml`.
+  - Heavy work runs only after the harness exits.
+- Tests: `.venv-harness/bin/python -m pytest` → **63 passed** (reporting tools, telemetry, structural IR, observer).
+
+## Decisions taken today
+
+- The 6,874-row `LoRAData/final` set is **demoted** (72% derived from public eval tasks, 88% graph puzzles). Replacement design: `Designs/FAILURE_DRIVEN_DATASET.md`.
+- `!include ../x` is allowed when it resolves inside the submission root. Verified in `adk_submission` code and by a live load; docs corrected.
+
+## Next (ordered)
+
+1. **Fix local fastapi grading.** Owner picks: amd64 sandbox image, or an arm64 `pydantic_core 2.46.4` wheel overlay.
+2. **v7 agent** aimed at the two largest measured defects:
+   - (a) Edit reliability: re-read the exact lines before `edit_file`, small unique anchors, route failures to `fix_edit.py`.
+   - (b) Reproduce-first: write a `/tmp` repro, run it red, then green.
+   - Measure on paired23 against v6's 7/23.
+3. **Kaggle L4 timing run** (notebook still never executed): seconds per task, vLLM start-up, projected 120-task wall time ≤ 10 h.
+4. **Seal a floor zip** of the best prompt-only version; first daily submission with owner approval.
+5. **Failure-driven dataset pilot** after owner sign-off on `FAILURE_DRIVEN_DATASET.md` §6: repo list + download, generation on Kaggle, teacher yes/no.
+
+## Open questions for the owner
+
+- The fastapi fix choice (item 1).
+- Approve the frontier-loop gates in `docs/frontier-loop/GOAL.md`.
+- Dataset §6 decisions.
+- No GitHub remote exists. Add a private one?
