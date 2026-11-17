@@ -209,6 +209,8 @@ def ingest_task(con, run_id, rd: Path, r: dict, gold: dict, tok, budget, functio
             "thinking_chars": len(think), "thinking_tokens": tt, "over_thinking_budget": over,
             "n_tool_calls": len(tcs), "llm_call_count": s.get("llm_call_count"),
             "thinking_text": think or None,
+            "message_text": (str(s.get("message") or "")[:20000] or None)
+            if s.get("source") == "agent" and et in ("final", "text") else None,
             "tool_name": first_tc.get("function_name"),
             "tool_args": json.dumps(first_tc.get("arguments"))[:20000] if tcs else None,
             "observation": (str((s.get("observation") or {}).get("content"))[:20000]

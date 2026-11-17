@@ -17,7 +17,17 @@ MODEL="$HOME/models/gemma-4-e4b-it-qat-w4a16-mlx"
 export DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1
 mkdir -p "$OUT"
+# TASKS selects the folder the harness reads wheels from (the folder beside tasks.jsonl).
+# DataSets/local_overlay/data (Tools/local/build_wheel_overlay.py) swaps x86_64-only compiled
+# wheels for arm64 twins on Apple silicon. The harness caches unpacked wheels under TMPDIR
+# with a fixed name, so an overlay run gets its own TMPDIR to avoid reusing the old unpack.
+TASKS="${TASKS:-DataSets/public/data/tasks.jsonl}"
+HARNESS_TMP="${TMPDIR:-/tmp}"
+if [[ "$TASKS" == *local_overlay* ]]; then
+  HARNESS_TMP="$HOME/.cache/swegemma_overlay_tmp"; mkdir -p "$HARNESS_TMP"
+fi
 
+export TASKS
 read -r TS CALLS MINS TURNS <<<"$(.venv-harness/bin/python - "$SUB" <<'PY'
 import sys, yaml
 e = yaml.safe_load(open(f"{sys.argv[1]}/eval_config.yaml"))["evaluation"]
@@ -44,7 +54,7 @@ meta = {
                  if Path(sub, "configs", "sampling.yaml").exists() else
                  {p.stem.removeprefix("sampling_"): yaml.safe_load(p.read_text())
                   for p in sorted(Path(sub, "configs").glob("sampling*.yaml"))}),
-    "task_ids_file": ids, "task_ids": Path(ids).read_text().split(),
+    "task_ids_file": ids, "tasks_path": __import__("os").environ.get("TASKS", "DataSets/public/data/tasks.jsonl"), "task_ids": Path(ids).read_text().split(),
     "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     "notes": "local MLX stand-in: thinking_budget not enforced, no events compaction",
 }
@@ -68,9 +78,9 @@ trap cleanup EXIT
 
 echo "run $RUN_ID: budget timeout=$TS calls=$CALLS minutes=$MINS turns=$TURNS" | tee "$OUT/run.log"
 set +e
-OPENAI_BASE_URL=http://127.0.0.1:8125/v1 OPENAI_API_KEY=EMPTY sandbox-exec -f "$SB" \
+OPENAI_BASE_URL=http://127.0.0.1:8125/v1 OPENAI_API_KEY=EMPTY TMPDIR="$HARNESS_TMP" sandbox-exec -f "$SB" \
   .venv-harness/bin/swegemma eval \
-  --tasks DataSets/public/data/tasks.jsonl --snapshots-dir DataSets/public/data/snapshots \
+  --tasks "$TASKS" --snapshots-dir DataSets/public/data/snapshots \
   --submission-dir "$SUB" --results-dir "$OUT" --sandbox docker --concurrency 1 \
   --task-ids $(cat "$IDS") --models-yaml Tools/local/models_local_8125.yaml \
   --max-tool-calls "$CALLS" --max-time-minutes "$MINS" --max-turns "$TURNS" \
