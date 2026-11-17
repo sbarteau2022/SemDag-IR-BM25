@@ -48,7 +48,7 @@ Watch for: `.sh` is **not** in the list, though the Overview says skills can hol
 - Paths resolve relative to the file containing the tag. [OV]
 - "Absolute paths, null bytes, `..` traversal components, and symlinks resolving outside the submission root are strictly blocked (`PathTraversalError`)."
 
-So an `!include` inside `sub_agents/x.yaml` cannot use `../prompts/...`. Sub-agent prompts must sit at or below `sub_agents/`, or be inlined.
+**Correction (2026-11-17, verified in code and by a live load):** the quoted rule blocks `..` that *escapes* the root, not `..` as such. `adk_submission/yaml_loader.py::_resolve_include_path` joins the path to the including file's directory and passes it to `validate_sandboxed_path(base_dir=root)`, which only rejects targets outside the root, symlinks, missing files and other extensions. So `sub_agents/x.yaml` **may** use `!include ../prompts/x.md` (the official sample does), while `../../outside.md` and `/abs/path` are rejected.
 
 ## 4. Agent schema [HR §2.3]
 
@@ -82,7 +82,7 @@ So an `!include` inside `sub_agents/x.yaml` cannot use `../prompts/...`. Sub-age
 - [ ] Exactly one root config file
 - [ ] Every `model:` is `gemma-4-e4b-it-qat-w4a16-ct`
 - [ ] Only allowed extensions; no `.bak`, `.DS_Store`, `.sh`, `.bin`
-- [ ] No symlinks, no `..` in `!include`
+- [ ] No symlinks; every `!include` resolves inside the submission root
 - [ ] Unpacked size < 3 GiB
 - [ ] Adapter dirs named per regex, rank ≤ 128, `.safetensors`
 - [ ] No forbidden keys in `generate_content_config`

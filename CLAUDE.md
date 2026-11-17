@@ -50,10 +50,10 @@ submission.zip
 ### Critical File Extension & Traversal Rules:
 - **Allowed Extensions ONLY**: `.yaml`, `.yml`, `.md`, `.txt`, `.py`, `.json`, `.safetensors`.
 - **STRICTLY FORBIDDEN / DISQUALIFYING FILES**: `.sh` (validator rejects bash scripts!), `.bin`, `.pt`, `.pth`, `.pyc`, `.DS_Store`, `.bak`, `.gitkeep`, or extensionless files (e.g. `LICENSE`). A single stray file will fail `adk_submission` validation!
-- **Sandboxed `!include` Directive**:
-  - Paths resolve relative to the file containing the tag.
-  - Absolute paths, null bytes, and parent traversal (`..`) are strictly prohibited (`PathTraversalError`).
-  - Sub-agent YAMLs cannot reference `../prompts/`; store prompts at or below the referring file's directory.
+- **Sandboxed `!include` Directive** (verified 2026-11-17 against `adk_submission/yaml_loader.py::_resolve_include_path` and a live load):
+  - Paths resolve relative to the file containing the tag, then must land **inside the submission root**.
+  - `..` is allowed when the resolved target stays inside the root: `sub_agents/x.yaml` may use `!include ../prompts/x.md` (the official sample does this).
+  - Rejected with `PathTraversalError`: a target that escapes the root (`../../outside.md`), absolute paths, null bytes, and any symlink in the target or its parents. The target must exist and be `.md`, `.txt`, `.yaml` or `.yml`.
 
 ---
 
@@ -69,10 +69,14 @@ submission.zip
    - All ~120 evaluation tasks run **sequentially in a single 12-hour job**.
    - If the cumulative runtime exceeds 12 hours, **the entire submission errors and scores 0.0**.
    - **MANDATORY**: You must include `eval_config.yaml` with explicit bounds:
-     - `max_time_minutes: 5` (120 tasks × 5 min = 10 hrs, leaving 2 hrs headroom for vLLM startup and container provisioning).
-     - `timeout_seconds: 60` (or `120`).
-     - `max_tool_calls: 30` to `50`.
-     - `max_turns: 50`.
+     ```yaml
+     evaluation:              # canonical, from AgenticSubmission/v6_1_budget/eval_config.yaml
+       timeout_seconds: 120   # per shell command
+       max_tool_calls: 40     # observed v6 max 15
+       max_time_minutes: 5    # 720 - ~10 vLLM start - ~30 setup = 680 min / 120 tasks = 5.67
+       max_turns: 60
+     ```
+     The harness enforces `max_time_minutes` with `asyncio.timeout` around the whole agent run, so an in-flight model call cannot overrun it.
 4. **Offline Sandboxing (`network_mode="none"`)**:
    - Containers have no internet. No pip installs, no curl, no external API calls during evaluation.
 5. **Protected Files & Anti-Tampering Mechanism**:
@@ -151,8 +155,7 @@ sequenceDiagram
 - Multi-adapter routing: Bind `adapter: main_lora` to the primary coder and `adapter: search_lora` to the exploration agent.
 
 ### E. Sampling Hyperparameters (`configs/sampling.yaml`)
-- `temperature: 0.2`, `top_p: 0.95`, `max_output_tokens: 16384`.
-- `thinking_config`: `thinking_budget: 4096`, `include_thoughts: true`. (Do NOT set `thinking_level` with vLLM LoRA endpoints).
+- `temperature: 0.2`, `top_p: 0.95`, `max_output_tokens: 8192`, `thinking_config: {thinking_budget: 4096, include_thoughts: true}` (canonical, `AgenticSubmission/v6_1_budget/configs/sampling.yaml`; 1,413 recorded steps peak at 5,501 output tokens, so 8,192 never truncates but bounds a runaway call). `thinking_budget` is enforced by the scorer's vLLM, not by local MLX; `include_thoughts: true` keeps thoughts in later turns' context. Omit `thinking_level` with vLLM LoRA endpoints.
 
 ---
 
@@ -179,21 +182,16 @@ flowchart LR
 
 ### Local Execution Commands (Apple Silicon):
 ```bash
-# 1. Start local MLX model endpoint (OpenAI compatible on port 8123)
-Tools/serve_e4b_mlx.sh
-
-# 2. Validate directory schema before running
-.venv-harness/bin/python -c "from pathlib import Path; from adk_submission import validate_directory; from swegemma.config import build_submission_limits; validate_directory(Path('AgenticSubmission/v4_semdag'), limits=build_submission_limits()[0])"
-
-# 3. Evaluate locally against SWE-bench tasks
-.venv-harness/bin/swegemma eval \
-  --tasks DataSets/public/data/tasks.jsonl \
-  --snapshots-dir DataSets/public/data/snapshots \
-  --submission-dir AgenticSubmission/v4_semdag \
-  --results-dir results/run_v4_semdag \
-  --sandbox docker \
-  --concurrency 1
+# Validate a submission directory
+.venv-harness/bin/python -c "from pathlib import Path; from adk_submission import validate_directory; from swegemma.config import build_submission_limits; validate_directory(Path('AgenticSubmission/v6_1_budget'), limits=build_submission_limits()[0])"
+# Scored-style local run: no network (macOS seatbelt), Docker Desktop (never Colima),
+# MLX server on 8124 behind the telemetry proxy on 8125, budget read from the
+# submission's eval_config.yaml. Post-run: SQLite ingest, TELEMETRY.md, baked Docker image.
+Tools/run_eval_seatbelt.sh AgenticSubmission/v6_1_budget results/<run_dir> <ids_file> <run_id> <arm>
+# Tests
+.venv-harness/bin/python -m pytest
 ```
+Port 8123 is sometimes held by a ClickHouse container on this machine; local runs use 8124 (model) and 8125 (proxy). Telemetry docs: `Tools/telemetry/README.md`.
 
 ### CUDA Native Pipeline (Remote L4x4 GPUs):
 - **Serving**: vLLM with `tensor_parallel_size=4`, `tool_call_parser=gemma4`, `reasoning_parser=gemma4`, `max_model_len=32768`.

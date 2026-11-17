@@ -1,5 +1,16 @@
 # Gemma-4-E4B Dev-Agent LoRA — Design (LoRA · Training · Datasets)
 
+> **Status 2026-11-17: DEMOTED.** The dataset built under this design (`LoRAData/final/`, 6,874 rows) is
+> not the training set for the submission. Measured: 72% of rows derive from the 129 public tasks
+> (the only local eval set), 88% are graph/DAG puzzle families rather than agent trajectories,
+> 716 rows are agent turns, p95 length 2.2k tokens vs real trajectories peaking at 22k context.
+> The hidden test set comes from private repositories, so the adapter must generalise to unseen
+> repos inside the harness protocol. The replacement is a failure-driven, repo-disjoint trajectory
+> set defined in `Designs/FAILURE_DRIVEN_DATASET.md`, built from telemetry of real runs
+> (`Tools/telemetry/`, run_11 onward). Sections 2, 5, 5b and 7 below (capabilities, LoRA config,
+> SFT-then-RLVR, integrity) still apply; section 3's sources and section 4's pipeline are superseded.
+
+
 **Status:** design, pre-build. **Target:** `gemma-4-E4B-it` QAT (`w4a16-ct`) SWE
 dev agent. **Scored metric:** `swegemma` `resolution_rate` (patch makes the
 hidden tests pass). **Hard rules:** single model + LoRA, adapter precision must

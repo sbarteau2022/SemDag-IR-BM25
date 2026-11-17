@@ -1,5 +1,11 @@
 # Roadmap — grounded in current state (2026-11-12 → Dec 2)
 
+> **Status 2026-11-17 (supersedes "Where we are" below):** baselines exist (v6 7/23 on paired23,
+> run_10); `eval_config` is 120 s / 40 calls / 5 min / 60 turns on v2, v3, v4, v6, v6.1; a
+> 6,874-row LoRA set exists but is demoted (see `LORA_TRAINING_DESIGN.md`). Phase 2 telemetry is
+> now `Tools/telemetry/` (SQLite, not nemo-relay). Phase 4 data is redefined as failure-driven,
+> repo-disjoint trajectories (`FAILURE_DRIVEN_DATASET.md`). Current resume point: `CHECKPOINT.md`.
+
 ## Where we are (facts, not plans)
 - Designs locked: E4B + multi-LoRA ($10k tier); SFT-seed → RL-with-verifiable-
   rewards; repo_eval = verifier + reward + data-filter; reason-first→temp-0;

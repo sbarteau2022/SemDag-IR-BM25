@@ -1,5 +1,7 @@
 # CHECKPOINT — LoRA render gate (2026-11-12)
 
+> **Status 2026-11-17: DEMOTED** to an auxiliary/ablation pool. Do not train the submission adapter on it. See `Designs/LORA_TRAINING_DESIGN.md` banner and `Designs/FAILURE_DRIVEN_DATASET.md`.
+
 ## Objective
 Build the raw->final renderer for the E4B LoRA dataset: Gemma-4 chat template, `enable_thinking=true`,
 `preserve_thinking=true`, assistant-only loss masking, with every row gated (schema, contamination,
