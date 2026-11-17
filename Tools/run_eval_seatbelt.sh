@@ -27,7 +27,7 @@ if [[ "$TASKS" == *local_overlay* ]]; then
   HARNESS_TMP="$HOME/.cache/swegemma_overlay_tmp"; mkdir -p "$HARNESS_TMP"
 fi
 
-export TASKS SERVER="${SERVER:-mlx_lm}"
+export TASKS SERVER="${SERVER:-omlx}"
 # Refuse to start on a submission the official validator rejects (e.g. a stray __pycache__).
 .venv-harness/bin/python -c "import sys; from pathlib import Path; from adk_submission import validate_directory; from swegemma.config import build_submission_limits; validate_directory(Path(sys.argv[1]), limits=build_submission_limits()[0])" "$SUB" \
   || { echo "submission $SUB fails validation; not starting" >&2; exit 2; }
@@ -51,7 +51,7 @@ meta = {
     "git_head": subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip(),
     "git_dirty": bool(subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout.strip()),
     "sandbox": "docker", "seatbelt": 1, "docker_host": "Docker Desktop",
-    "model": "gemma-4-e4b-it-qat-w4a16-mlx", "server": __import__("os").environ.get("SERVER", "mlx_lm"),
+    "model": "gemma-4-e4b-it-qat-w4a16-mlx", "server": __import__("os").environ.get("SERVER", "omlx"),
     "budget": yaml.safe_load(open(f"{sub}/eval_config.yaml"))["evaluation"],
     "sampling": (yaml.safe_load(open(f"{sub}/configs/sampling.yaml"))
                  if Path(sub, "configs", "sampling.yaml").exists() else
@@ -64,12 +64,12 @@ meta = {
 Path(out, "run_meta.json").write_text(json.dumps(meta, indent=1))
 PY
 
-# SERVER selects the local model server behind the proxy: mlx_lm (default, verified),
-# omlx (oMLX 0.7.0, verified 2026-11-17: see results/server_bench/NOTES.md) or
+# SERVER selects the local model server behind the proxy: mlx_lm (verified),
+# omlx (default; oMLX 0.7.0, verified 2026-11-17: see results/server_bench/NOTES.md) or
 # rapid (rapid-mlx 1.0.0, NOT yet verified: see results/server_bench/NOTES.md). rapid-mlx is closer to
 # the scorer's vLLM: continuous batching, prefix cache, gemma4 tool/reasoning parsers, and
 # a 32,768-token context cap like max_model_len.
-SERVER="${SERVER:-mlx_lm}"
+SERVER="${SERVER:-omlx}"
 STARTED_SERVER=0
 MODELS_YAML=Tools/local/models_local_8125.yaml
 [[ "$SERVER" == omlx ]] && MODELS_YAML=Tools/local/models_local_omlx_8125.yaml

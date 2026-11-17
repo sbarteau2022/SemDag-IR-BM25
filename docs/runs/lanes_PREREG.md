@@ -41,3 +41,9 @@ Each lane is 1 control (v6 resolved it) + 4 tasks covering run_10's failure clas
 - run_13: null (wiring, `top_k` float). run_14: null. 3 of 5 tasks were rejected by the harness because `__pycache__` was written into v7 by a test run during the lane; the 2 valid tasks are kept as diagnostics only. Both stay in the failure ledger.
 - The requests lane is redone in full as **run_15** (same 5 tasks, v7 at commit `2c34a93`). Guards now in place: the tests never write bytecode, the official validator is run on every submission in the suite, and the runner refuses an invalid submission.
 - The "ref" column is v6's earlier run_10 result on the same tasks; it is a reference, not a run of v6.
+
+## Amendment 2026-11-17 (server change, before run_15)
+
+- Local model server switched to **oMLX 0.7.0** (`SERVER=omlx`, runner default). Same checkpoint (symlink), equivalence 2/2, thinking honoured per request, 4-stream batching 2.3× (`results/server_bench/NOTES.md`). Single-stream speed is unchanged (~60 tok/s).
+- Competition check: concurrent LLM calls via `ParallelAgent` are allowed (staff, 2026-10-11); parallel tool calls are not (staff, 2026-09-28); tasks run sequentially. Parallel-role arms are allowed and will be preregistered separately.
+- The aborted run_15 attempt (stopped on the owner's pause, before any task finished) is discarded; run_15 starts fresh on oMLX.
