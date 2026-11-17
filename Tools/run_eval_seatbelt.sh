@@ -73,6 +73,14 @@ SERVER="${SERVER:-omlx}"
 STARTED_SERVER=0
 MODELS_YAML=Tools/local/models_local_8125.yaml
 [[ "$SERVER" == omlx ]] && MODELS_YAML=Tools/local/models_local_omlx_8125.yaml
+# Record who serves port 8124. If a server is already up (for example the oMLX app, which
+# auto-starts on 8124), the runner reuses it: it is then NOT under the seatbelt profile and
+# its flags are whatever that process was started with. That provenance goes into run.log.
+EXISTING_8124="$(lsof -nP -iTCP:8124 -sTCP:LISTEN -Fpc 2>/dev/null | tr '\n' ' ')"
+if [[ -n "$EXISTING_8124" ]]; then
+  echo "model server: REUSED existing listener on 8124 ($EXISTING_8124); not seatbelted by this runner" \
+    | tee "$OUT/model_server_provenance.txt"
+fi
 if ! curl -s -m 2 http://127.0.0.1:8124/v1/models >/dev/null; then
   if [[ "$SERVER" == omlx ]]; then
     # oMLX 0.7.0 serves every model folder under --model-dir; ~/models/omlx_e4b holds only a
@@ -98,17 +106,33 @@ if ! curl -s -m 2 http://127.0.0.1:8124/v1/models >/dev/null; then
   SERVER_PID=$!; STARTED_SERVER=1
   for i in {1..240}; do curl -s -m 2 http://127.0.0.1:8124/v1/models >/dev/null && break; sleep 2; done
 fi
+# Scorer parity (docs/SCORER_PARITY.md): oMLX reads the thinking budget from `thinking_budget`,
+# not ADK's `thinking_token_budget`, so the proxy copies it across (GAP 2). Compaction and the
+# context cache are switched on by Tools/local/eval_parity.py (GAP 1; SWEGEMMA_PARITY=0 = off).
+PROXY_ARGS=()
+[[ $SERVER = omlx ]] && PROXY_ARGS=(--thinking-budget-field thinking_budget)
 sandbox-exec -f "$SB" "$ROOT/.venv-harness/bin/python" Tools/telemetry/llm_proxy.py \
-  --listen 8125 --upstream 127.0.0.1:8124 --db "$DB" --run-id "$RUN_ID" >"$OUT/llm_proxy.log" 2>&1 &
+  --listen 8125 --upstream 127.0.0.1:8124 --db "$DB" --run-id "$RUN_ID" \
+  "${PROXY_ARGS[@]}" >"$OUT/llm_proxy.log" 2>&1 &
 PROXY_PID=$!
 for i in {1..30}; do curl -s -m 2 http://127.0.0.1:8125/v1/models >/dev/null && break; sleep 1; done
+if ! curl -s -m 2 http://127.0.0.1:8125/v1/models >/dev/null; then
+  echo "ABORT: telemetry proxy did not come up on 8125; see $OUT/llm_proxy.log" | tee "$OUT/run.log" >&2
+  kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true
+  exit 3
+fi
+if ! docker info >/dev/null 2>&1; then
+  echo "ABORT: Docker daemon not reachable (DOCKER_HOST=${DOCKER_HOST:-unset})" | tee "$OUT/run.log" >&2
+  kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true
+  exit 4
+fi
 cleanup() { kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true; }
 trap cleanup EXIT
 
 echo "run $RUN_ID: budget timeout=$TS calls=$CALLS minutes=$MINS turns=$TURNS" | tee "$OUT/run.log"
 set +e
 OPENAI_BASE_URL=http://127.0.0.1:8125/v1 OPENAI_API_KEY=EMPTY TMPDIR="$HARNESS_TMP" sandbox-exec -f "$SB" \
-  .venv-harness/bin/swegemma eval \
+  .venv-harness/bin/python Tools/local/eval_parity.py eval \
   --tasks "$TASKS" --snapshots-dir DataSets/public/data/snapshots \
   --submission-dir "$SUB" --results-dir "$OUT" --sandbox docker --concurrency 1 \
   --task-ids $(cat "$IDS") --models-yaml "$MODELS_YAML" \

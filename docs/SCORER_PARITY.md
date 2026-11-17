@@ -69,8 +69,8 @@ Status labels: **OFFICIAL** (rules page or staff), **DOCUMENTED** (HARNESS_READM
 | Budgets | eval_config.yaml | runner passes eval_config values as CLI flags | match |
 | Verification timeout | 300 s | CLI default 300 s | match |
 | Retries | ModelRetryPlugin | same `agent_runner.py` | match |
-| **Compaction** | 14,336-token compaction + context cache | **Off.** `swegemma eval` has no flag for it and `EvalConfig` defaults are `None` ([SRC] `config.py:117-118`, `agent_runner.py:692-695`) | **GAP 1** |
-| **Thinking budget** | Enforced by the vLLM logits processor | **Not enforced.** ADK sends `extra_body.thinking_token_budget`. oMLX 0.7.0 reads a different field, top-level `thinking_budget` (`omlx/server.py:1887-1900`, `api/openai_models.py:368`), so the budget is dropped | **GAP 2 (closable)** |
+| **Compaction** | 14,336-token compaction + context cache | **Now on via `Tools/local/eval_parity.py`** (unit-tested; live check pending, Docker Desktop quit mid-run 2026-11-17). Before: off. `swegemma eval` has no flag for it and `EvalConfig` defaults are `None` ([SRC] `config.py:117-118`, `agent_runner.py:692-695`) | **GAP 1** |
+| **Thinking budget** | Enforced by the vLLM logits processor | **Now enforced** by the proxy `--thinking-budget-field thinking_budget` (LIVE-MEASURED 2026-11-17: budget 64 → 61 reasoning tokens, 1024 → 1021, no budget → 1557; `results/server_bench/thinking_budget_gate/`). Before: not enforced. ADK sends `extra_body.thinking_token_budget`. oMLX 0.7.0 reads a different field, top-level `thinking_budget` (`omlx/server.py:1887-1900`, `api/openai_models.py:368`), so the budget is dropped | **GAP 2 (closable)** |
 | **Penalties** | Over the whole output | mlx_lm 20-token window (`sample_utils.py:76-82`) | **GAP 3** |
 | **Speed** | 4×L4 TP=4, E4B; **not measured by us** | 57.5 tok/s decode, 0.4–0.6 s TTFT (run_15, run_16) | **GAP 4, unknown size** |
 | **Dependencies** | Private Docker sandbox, its own dependency set | Harness picks the newest wheel per package (`container_setup.py::_deduplicate_wheels`); fastapi breaks (run_18) | **GAP 5** (irrelevant for fastapi, which is not scored) |

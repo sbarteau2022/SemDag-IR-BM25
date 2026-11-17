@@ -145,7 +145,25 @@ def request_fields(body: dict) -> dict:
     }
 
 
-def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float):
+def enforce_thinking_budget(body: dict, field: str | None) -> dict:
+    """Copy the request's thinking budget into the field the local server enforces.
+
+    ADK sends the budget as `thinking_token_budget` (top level, or under `extra_body`), which
+    vLLM's logits processor enforces on the scorer. oMLX 0.7.0 ignores that name and reads
+    `thinking_budget` instead (omlx/server.py `_resolve_thinking_budget`). Only positive
+    budgets are copied; a field the client already set is left alone.
+    """
+    if not field:
+        return body
+    budget = request_fields(body)["req_thinking_budget"]
+    if isinstance(budget, (int, float)) and budget > 0 and field not in body:
+        body = dict(body)
+        body[field] = int(budget)
+    return body
+
+
+def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
+                 budget_field: str | None = None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -182,7 +200,8 @@ def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float):
             row = {"run_id": run_id, "call_id": uuid.uuid4().hex, "wall_start": wall,
                    "req_bytes": len(raw), **request_fields(body)}
             client_stream = bool(body.get("stream"))
-            up = dict(body)
+            up = enforce_thinking_budget(dict(body), budget_field)
+            row["enforced_thinking_budget"] = up.get(budget_field) if budget_field else None
             up["stream"] = True
             up["stream_options"] = {"include_usage": True}
             acc = Accumulator(t0)
@@ -268,11 +287,13 @@ def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float):
     return Handler
 
 
-def serve(listen: int, upstream: str, db_path: str, run_id: str, timeout: float = 900.0):
+def serve(listen: int, upstream: str, db_path: str, run_id: str, timeout: float = 900.0,
+          budget_field: str | None = None):
     host, port = upstream.rsplit(":", 1)
     con = tdb.connect(db_path)
     httpd = ThreadingHTTPServer(("127.0.0.1", listen),
-                                make_handler((host, int(port)), con, run_id, timeout))
+                                make_handler((host, int(port)), con, run_id, timeout,
+                                             budget_field))
     httpd.daemon_threads = True
     return httpd
 
@@ -284,10 +305,12 @@ def main():
     ap.add_argument("--db", required=True)
     ap.add_argument("--run-id", required=True)
     ap.add_argument("--timeout", type=float, default=900.0)
+    ap.add_argument("--thinking-budget-field", default=None,
+                    help="copy thinking_token_budget into this request field (oMLX: thinking_budget)")
     a = ap.parse_args()
-    httpd = serve(a.listen, a.upstream, a.db, a.run_id, a.timeout)
-    print(f"llm_proxy: 127.0.0.1:{a.listen} -> {a.upstream} run_id={a.run_id} db={a.db}",
-          flush=True)
+    httpd = serve(a.listen, a.upstream, a.db, a.run_id, a.timeout, a.thinking_budget_field)
+    print(f"llm_proxy: 127.0.0.1:{a.listen} -> {a.upstream} run_id={a.run_id} db={a.db} "
+          f"thinking_budget_field={a.thinking_budget_field}", flush=True)
     httpd.serve_forever()
 
 

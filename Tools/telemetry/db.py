@@ -112,7 +112,8 @@ CREATE VIEW IF NOT EXISTS v_thinking_budget AS
 # an existing database lacks, so older stores keep working without a rebuild.
 MIGRATIONS = [("tasks", "destructive_write", "INTEGER"), ("tasks", "test_env_broken", "INTEGER"),
               ("tasks", "agent_saw_env_broken", "INTEGER"),
-              ("steps", "message_text", "TEXT")]
+              ("steps", "message_text", "TEXT"),
+              ("llm_calls", "enforced_thinking_budget", "INTEGER")]
 
 _LOCK = threading.Lock()
 

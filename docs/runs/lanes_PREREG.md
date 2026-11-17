@@ -47,3 +47,9 @@ Each lane is 1 control (v6 resolved it) + 4 tasks covering run_10's failure clas
 - Local model server switched to **oMLX 0.7.0** (`SERVER=omlx`, runner default). Same checkpoint (symlink), equivalence 2/2, thinking honoured per request, 4-stream batching 2.3× (`results/server_bench/NOTES.md`). Single-stream speed is unchanged (~60 tok/s).
 - Competition check: concurrent LLM calls via `ParallelAgent` are allowed (staff, 2026-10-11); parallel tool calls are not (staff, 2026-09-28); tasks run sequentially. Parallel-role arms are allowed and will be preregistered separately.
 - The aborted run_15 attempt (stopped on the owner's pause, before any task finished) is discarded; run_15 starts fresh on oMLX.
+
+## Amendment 2026-11-17 (server provenance, after run_18)
+
+- runs 15–18 did not start their own oMLX. A listener was already on 127.0.0.1:8124: `omlx-server` PID 70276, started 14:29 local, settings in `~/.omlx/settings.json` (model_dir `~/models/omlx_e4b`, max_concurrent_requests 4). The runner reuses a live 8124 listener, so that server was **not** under the seatbelt profile. Same binary (oMLX 0.7.0) and the same checkpoint symlink, so the lane results stand. The harness and task containers were still network-blocked (seatbelt plus Docker `network_mode=none`).
+- These runs had **no thinking-budget enforcement** and **no compaction** (see `docs/SCORER_PARITY.md`, GAP 1 and GAP 2). Both are fixed for later runs, so later lane runs are not directly comparable with runs 15–18.
+- The runner now writes `model_server_provenance.txt` whenever it reuses a server.
