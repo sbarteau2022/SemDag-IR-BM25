@@ -1,61 +1,218 @@
 # AGENTS.md: Gemma 4 Developer Agent Competition
 
-Solo entry in Kaggle's "Google - The Gemma 4 Developer Agent Competition" plus the Paper Track.
-Goal: top 3 on the main leaderboard and a strong paper. Resume from [CHECKPOINT.md](CHECKPOINT.md).
+Solo entry in Kaggle's "Google - The Gemma 4 Developer Agent Competition" ([Kaggle Competition Link](https://www.kaggle.com/competitions/gemma-4-developer-agent)) plus the Paper Track.
+Goal: Top 3 on the main leaderboard AND win the **$10,000 Small Model Bonus Prize**. Resume from [CHECKPOINT.md](CHECKPOINT.md).
 
-## Deadlines (11:59 PM UTC)
-- Paper Track: **Nov 12, 2026**.
-- Main entry and team merge: Nov 25. Final submission: **Dec 2, 2026**.
-- Small Model Prize deadline is unconfirmed (page says Nov 12 and "same as main track"; participants say Dec 2).
+---
 
-## Hard rules from the competition
-- Base model is `gemma-4-e4b-it-qat-w4a16-ct` only. One model across every agent and sub-agent. No mixing.
-- Agents may call only the nine harness tools: `run_command`, `read_file`, `edit_file`, `write_file`, `get_status`, `submit_patch`, `get_code_neighbors`, `search_similar_code`, `get_code_subgraph`. Extra behavior goes in prompts, sub-agents (`agent_tool`), or skill scripts.
-- No internet at runtime. Submission under 3 GiB unpacked. Allowed files: `.yaml .yml .md .txt .py .json .safetensors`. No symlinks, no `../` paths.
-- 12 hours total for all patches. A LoRA adapter makes tasks about 29% slower, so budget per-task time to fit.
-- One submission per day, two finals selected. No private code sharing outside the team.
-- Winners must open-source code and model (Apache 2.0) and ship training and inference code.
+## 1. Deadlines & Milestones (11:59 PM UTC)
+- **Paper Track**: Nov 12, 2026 (*Passed*).
+- **Entry & Team Merger Deadline**: **Nov 25, 2026** (Accept competition rules & finalize team before this date).
+- **Final Submission Deadline**: **Dec 2, 2026** (Both the Main Track and the **$10,000 Small Model Bonus** close on Dec 2, 2026 at 23:59 UTC, confirmed by host Elan Markowitz in forum thread 751104).
+- **Small Model Prize Requirement**: Highest ranking submission using Gemma E2B or E4B as base model; **must be chosen as one of the team's 2 selected final submissions**.
 
-## Competition sampling (configs/sampling.yaml)
-temperature 0.2, top_p 0.95, max_output_tokens 16384, thinking_budget 4096, include_thoughts true.
-Local stand-in uses `--max-tokens 4096` and reasoning effort low (mlx-lm has no thinking budget).
+---
 
-## Layout
-- `DataSets/public/data/`: extracted dataset (tasks.jsonl, snapshots, graphs, embeddings, wheels, docker, sample_submission).
-- `DataSets/public/wheelhouse/`: swegemma, adk_submission, adk_eval_core wheels (from Kaggle dataset `metric/gemma-4-developer-agent-wheelhouse`).
-- `AgenticSubmission/v0_baseline/`: baseline agent (E4B, no adapters). `v0_baseline_submission.zip` is its package.
-- `Models/`: symlink to the CUDA checkpoint. MLX copy: `~/models/gemma-4-e4b-it-qat-w4a16-mlx`.
-- `Tools/convert_ct_to_mlx.py`: lossless repack of the compressed-tensors checkpoint to MLX 4-bit.
-- `Tools/serve_e4b_mlx.sh`: starts the local OpenAI-compatible server on `127.0.0.1:8123`.
-- `PaperTrack/`: paper draft and ideas. `Rules/Overview/`: rules audit. `Designs/Paperwork/Plan_of_Attack.md`: plan.
-- `.venv-harness` (swegemma, Python 3.13) and `.venv-mlx` (mlx-vlm, mlx-lm). Do not mix them.
+## 2. Mandatory Submission Worktree Replica (The Submission Zip Blueprint)
 
-## Commands
-```bash
-# serve the local model (competition sampling defaults)
-Tools/serve_e4b_mlx.sh
-# validate a submission directory
-.venv-harness/bin/python -c "from pathlib import Path; from adk_submission import validate_directory; from swegemma.config import build_submission_limits; validate_directory(Path('AgenticSubmission/v0_baseline'), limits=build_submission_limits()[0])"
-# evaluate locally (needs a model endpoint; Docker Desktop must be running)
-.venv-harness/bin/swegemma eval --tasks DataSets/public/data/tasks.jsonl --snapshots-dir DataSets/public/data/snapshots --submission-dir AgenticSubmission/v0_baseline --results-dir results/run_01 --sandbox docker --concurrency 1
+Every submission package (`submission.zip` generated in Kaggle working dir) **must strictly conform** to the official declarative structure:
+
+```text
+submission.zip
+├── agent.yaml              # REQUIRED: Root agent config (or root_agent.yaml)
+├── eval_config.yaml        # CRITICAL: Per-task operational budgets (prevents 12h run failure)
+├── configs/
+│   └── sampling.yaml       # Generation parameters loaded via !include
+├── prompts/
+│   ├── system.md           # Root system instructions loaded via !include
+│   └── analyzer.md         # Sub-agent prompt definitions
+├── sub_agents/
+│   └── code_analyzer.yaml  # Sub-agent or AgentTool YAML configurations
+├── adapters/               # PEFT LoRA adapters (< 3 GiB total budget)
+│   ├── main_lora/
+│   │   ├── adapter_config.json
+│   │   └── adapter_model.safetensors
+│   └── tool_lora/
+│       ├── adapter_config.json
+│       └── adapter_model.safetensors
+└── skills/                 # ADK Skill packages
+    └── repo_navigation/
+        ├── SKILL.md        # YAML frontmatter + Markdown tool usage manual
+        ├── scripts/        # Python scripts executed in the container (.py ONLY!)
+        └── resources/      # Domain knowledge markdown files
 ```
-Docker has 8 GB RAM and each task container gets 4 GiB, so keep concurrency at 1 or 2.
 
-## Gotchas
-- Scratch files go in `/tmp`, never `/workspace`: `submit_patch` includes every untracked file there.
-- Never edit `/workspace/pytest.ini`, `conftest.py`, or test files; the harness strips those diffs.
-- Scored runs use the subprocess sandbox, which skips test-dependency install (about 35 tasks hit missing `inline_snapshot` and `dirty_equals`). Local Docker runs avoid that, so local pass rates look better.
-- Port 8000 is taken on this machine; use 8123 for the model server.
-- LoRA adapters must target the E4B base. The 31B adapter config in `LoRA Adapters/` is unusable.
-- Training needs CUDA: use a Kaggle L4x4 notebook (no internet there), not the Mac.
+### Critical File Format & Pathing Constraints:
+- **Allowed Extensions ONLY**: `.yaml`, `.yml`, `.md`, `.txt`, `.py`, `.json`, `.safetensors`.
+- **FORBIDDEN / REJECTED EXTENSIONS**: `.sh` (validator rejects bash scripts in skills!), `.bin`, `.pt`, `.pth`, `.pyc`, `.DS_Store`, `.bak`, `.gitkeep`, or extensionless files. Any non-conforming file causes immediate validation rejection.
+- **Sandboxed `!include` Directive**:
+  - Resolves strictly relative to the including file.
+  - No absolute paths, null bytes, or `..` path traversals (`PathTraversalError`). Sub-agent configs must keep included prompts at or below their directory level.
+- **Archive Size**: Total unpacked submission size must be strictly `< 3 GiB` (`3,221,225,472` bytes), adapters included.
 
-## Do not
-- Do not submit to Kaggle, accept terms, or download large data without asking.
-- Do not print or commit credentials (`~/.kaggle/access_token`, any `*apiKey*.csv`).
-- Do not touch `/Users/stewartbarteau/Desktop/Qwen3.6Cyber` or its frontier goal; the user said to ignore it here.
-- Do not invent numbers for the paper. Every result needs a run behind it.
+---
 
-## Host-side verified research memory
+## 3. What CAN Be Optimized vs. What CANNOT Be Messed With
+
+### What Specifically CANNOT Be Messed With (Disqualification / Zero-Score Hazards):
+1. **Base Model Invariance**:
+   - `len(models) == 1` across all agents (`agent.yaml`, all `sub_agents/*.yaml`, and inline agents).
+   - Must be declared as `gemma-4-e4b-it-qat-w4a16-ct`. (Mixing models or using undeclared models raises `ParticipantVisibleError`).
+2. **No Python Submission Entrypoints**:
+   - Competitors do NOT submit executable Python files (`agent.py` or `agent_fn`) at the root. Everything is compiled by `adk-submission` from declarative YAML.
+3. **Sequential Execution & 12-Hour Hard Timeout**:
+   - All ~120 evaluation tasks run sequentially in a single 12-hour job.
+   - **Exceeding 12 hours causes the entire submission to error and receive a score of 0.0.**
+   - Omitted `eval_config.yaml` defaults to "no limit" in the scorer, guaranteeing job failure. You **must** set per-task ceilings:
+     ```yaml
+     evaluation:
+       max_time_minutes: 5       # Safe bound: 120 tasks * 5m = 10 hrs (2 hrs headroom for setup)
+       timeout_seconds: 60       # Per-command shell timeout (or 120)
+       max_tool_calls: 30        # Tool call budget
+       max_turns: 50             # Agent turns
+     ```
+4. **Air-Gapped Offline Sandbox (`network_mode="none"`)**:
+   - No internet access at runtime. Zero external API calls, curl commands, or pip installs.
+5. **Protected Test Files & Anti-Tampering Engine**:
+   - Changes to test files (`test_*.py`, `*_test.py`, `tests/`) and test runner files (`conftest.py`, `pytest.ini`, `pyproject.toml`, `tox.ini`, `setup.cfg`, `sitecustomize.py`) are forcefully stripped before Phase 2 verification. Agents must fix library code only!
+6. **Workspace Pollution**:
+   - `submit_patch()` captures `git add -N . && git diff HEAD`. Untracked files in `/workspace` enter the patch.
+   - Scratch files and reproduction scripts MUST be stored in `/tmp/`, NEVER in `/workspace/`.
+7. **Sandbox Resource Quotas**:
+   - 4 GiB RAM (exceeding triggers exit code 137 SIGKILL), 2 vCPUs.
+8. **Forbidden Keys in `generate_content_config`**:
+   - Setting `tools`, `system_instruction`, `http_options`, `safety_settings`, or `response_schema` inside `generate_content_config` raises validation errors.
+
+### What CAN and SHOULD Be Optimized (The Performance Levers):
+1. **Prompts & Reasoning Architecture**:
+   - Root instructions in `prompts/system.md` (test-driven reproduction, strict code inspection before editing).
+   - `generate_content_config`: `temperature: 0.2`, `top_p: 0.95`, `max_output_tokens: 16384`, `thinking_config: {thinking_budget: 4096, include_thoughts: true}`. (Omit `thinking_level` with vLLM LoRA endpoints).
+2. **Sub-Agent Decomposition (`sub_agents/`)**:
+   - Wrap deep exploratory code searches in an `agent_tool` with `skip_summarization: true` to protect the root agent's 32,768-token context window.
+3. **ADK Skills (`skills/`)**:
+   - Code navigation and retrieval routines implemented in Python (`skills/<name>/scripts/*.py`).
+   - SemDAG graph traversal or BM25 code indexing executed via `run_skill_script`.
+4. **PEFT LoRA Adapters (`adapters/`)**:
+   - Fine-tuned PEFT LoRA adapters targeting `gemma-4-e4b-it-qat-w4a16-ct` (rank $r \le 128$, `.safetensors`).
+   - Sizing: $r=16$ (~110–220 MB), $r=32$ (~220–450 MB). Multiple adapters can be served simultaneously (`main_lora`, `tool_lora`).
+5. **Phase 1 Tooling Protocol**:
+   - Mastering the 9 allowed tools (see Section 4).
+
+---
+
+## 4. The SWE-Python Benchmark & Two-Phase Lifecycle
+
+The `swegemma` evaluation engine scores submissions using a strict two-container lifecycle:
+
+```mermaid
+sequenceDiagram
+    participant Eval as swegemma Scoring Harness
+    participant ContA as Container A (Agent Execution)
+    participant Model as Gemma E4B (vLLM / MLX)
+    participant ContB as Container B (Verification Sandbox)
+
+    Eval->>ContA: Extract base_commit snapshot, editable install, baseline commit
+    Eval->>Model: Send build_agent_prompt(problem_statement, hints)
+    loop Tool Interaction Loop
+        Model->>ContA: Execute 9 allowed tools (run_command, read_file, edit_file, etc.)
+        ContA-->>Model: JSON tool response + budget warnings
+    end
+    Model->>ContA: submit_patch() [FREE, Ends Agent Turn]
+    ContA-->>Eval: Extract agent_patch (git diff HEAD)
+    Eval->>ContA: Terminate & wipe Container A
+    Eval->>ContB: Fresh base_commit container + reset test files
+    Eval->>ContB: Apply agent_patch (4-pass fallback: git apply / patch)
+    Eval->>ContB: Apply task.test_patch (Hidden tests)
+    Eval->>ContB: Execute hermetic pytest with JUnit XML output
+    ContB-->>Eval: exit_code == 0 & passed_tests > 0 & failures == 0
+    Eval->>Eval: Calculate Resolution Rate (Resolved / Total)
+```
+
+### The 9 Authorized Harness Tools:
+1. `run_command(command)`: Shell execution in `/bin/bash -c` under `/workspace`. 5,000 char output cap. Timeout `min(300s, remaining_time)`. Counts toward `tool_calls`.
+2. `submit_patch()`: Captures `git diff HEAD`. **FREE** (0 tool calls), but **terminates the agent session**. Always call last!
+3. `get_status()`: Queries remaining tool calls, time, and patch state. **FREE** (0 tool calls).
+4. `read_file(filepath, start_line, end_line)`: Line slicing. Capped at **150 lines** and **10,000 chars**. Counts.
+5. `edit_file(filepath, old_string, new_string, allow_multiple=False)`: 3-tier resilient matching (`exact` $\to$ `flexible` whitespace $\to$ `regex`). Counts.
+6. `write_file(filepath, content)`: Creates/overwrites files and creates parent directories. Counts.
+7. `get_code_neighbors(node, edge_type, max_neighbors=50)`: Code graph call-graph navigation. Capped at 5,000 chars. Counts.
+8. `search_similar_code(query, k=10)`: Vector similarity search over pre-computed `.npz` node embeddings. **Pass symbol names (`Class.method`)**, not raw free text! Capped at 5,000 chars. Counts.
+9. `get_code_subgraph(nodes)`: Subgraph neighborhood extraction. Capped at 5,000 chars. Counts.
+
+---
+
+## 5. Dual-Engine Workflow: Local MLX vs. Remote CUDA Native
+
+```mermaid
+flowchart LR
+    subgraph Local["Local Apple Silicon Engine (macOS)"]
+        MLX_Serve["Tools/serve_e4b_mlx.sh (Port 8123)\ngemma-4-e4b-it-qat-w4a16-mlx"]
+        Harness_Eval[".venv-harness swegemma eval\nDocker Sandbox (1-2 concurrency)"]
+        Verify_Delta["Axe 4 Analysis / Measured Pass Rate Growth"]
+    end
+
+    subgraph Cloud["Kaggle / Remote CUDA Native Engine (4x NVIDIA L4)"]
+        NVIDIA_Tools["NVIDIA Skills & API Tooling\nKernel Profiling & Throughput Optimization"]
+        PEFT_Train["LoRA Fine-Tuning\nTargeting E4B Linear Layers"]
+        Package_Zip["submission.zip Validation & Kaggle Upload"]
+    end
+
+    MLX_Serve --> Harness_Eval --> Verify_Delta
+    Verify_Delta -->|"Proven Algorithmic Gain"| PEFT_Train
+    PEFT_Train --> NVIDIA_Tools --> Package_Zip
+```
+
+### Local Development Loop (Apple Silicon):
+1. **Local Model Server**: `Tools/serve_e4b_mlx.sh` serves the 4-bit MLX model at `http://127.0.0.1:8123/v1` (`~/models/gemma-4-e4b-it-qat-w4a16-mlx`).
+2. **Directory Validation**:
+   ```bash
+   .venv-harness/bin/python -c "from pathlib import Path; from adk_submission import validate_directory; from swegemma.config import build_submission_limits; validate_directory(Path('AgenticSubmission/v4_semdag'), limits=build_submission_limits()[0])"
+   ```
+3. **Local Benchmark Evaluation**:
+   ```bash
+   .venv-harness/bin/swegemma eval \
+     --tasks DataSets/public/data/tasks.jsonl \
+     --snapshots-dir DataSets/public/data/snapshots \
+     --submission-dir AgenticSubmission/v4_semdag \
+     --results-dir results/run_v4_semdag \
+     --sandbox docker \
+     --concurrency 1
+   ```
+   *Note*: Local Docker memory is 8 GB; each container takes 4 GiB, so maintain concurrency at 1 or 2.
+
+### Remote CUDA Native Execution (Kaggle L4x4 GPUs):
+- **Hardware**: Dedicated machine with 4x NVIDIA L4 GPUs (96 GB total VRAM).
+- **Inference Runtime**: vLLM on `127.0.0.1:8000` with `tensor_parallel_size=4`, `max_model_len=32768`, `tool_call_parser='gemma4'`, `reasoning_parser='gemma4'`.
+- **NVIDIA Tooling & Optimization**: Utilize the repository's NVIDIA skills (`nvidia-skill-finder`, `tao-setup-nvidia-gpu-host`, TensorRT-LLM profiling) to maximize token throughput and minimize adapter switching overhead, ensuring sequential runs stay safely under the 5-minute per-task limit.
+- **PEFT Training**: Train LoRAs on Kaggle L4x4 instances. Only transfer weights to `adapters/` once local algorithmic enhancements prove distinct metric gains.
+
+---
+
+## 6. Layout Reference
+- `DataSets/public/data/`: Extracted tasks (`tasks.jsonl`), snapshots, graphs, embeddings, wheels, docker, sample submission.
+- `DataSets/public/wheelhouse/`: Official wheels (`swegemma`, `adk_submission`, `adk_eval_core`).
+- `AgenticSubmission/`: Candidate submission architectures (`v0_baseline`, `v2_bm25`, `v4_semdag`, etc.).
+- `Models/`: Symlink to CUDA checkpoint. MLX copy: `~/models/gemma-4-e4b-it-qat-w4a16-mlx`.
+- `Tools/convert_ct_to_mlx.py`: Lossless repack of compressed-tensors checkpoint to MLX 4-bit.
+- `Tools/serve_e4b_mlx.sh`: Local OpenAI-compatible server on `127.0.0.1:8123`.
+- `PaperTrack/`: Research paper artifacts and results.
+- `.venv-harness`: Evaluation harness environment (Python 3.13, swegemma).
+- `.venv-mlx`: Local MLX serving environment. Do not mix with `.venv-harness`.
+
+---
+
+## 7. Operational Commandments & Gotchas
+
+1. **Keep `edit_file` payloads small**: Huge thought blocks followed by giant edits can exceed `max_output_tokens` and clip `<|tool_call|>`. Keep edits incremental.
+2. **Scratch files go in `/tmp`**: Never leave temporary files in `/workspace`; `submit_patch` will capture them into the patch and cause grading failures.
+3. **Never edit `/workspace/pytest.ini` or `conftest.py`**: The harness commits these at baseline; edits will enter `git diff HEAD` and corrupt verification.
+4. **Always verify before calling `submit_patch()`**: `submit_patch()` is free but immediately ends the agent turn.
+5. **No private code sharing**: Violates Kaggle competition rules.
+6. **No unverified numbers**: Every claim in documentation or writeups must be backed by a verified `swegemma eval` run artifact.
+
+---
+
+## 8. Host-Side Verified Research Memory
 
 - During design and paper research, query the canonical local Qdrant Edge shard at `/Users/stewartbarteau/Desktop/Ai Research and Preprint Vault/qdrant-edge-research-v1` before repeating literature searches.
 - After opening and verifying primary sources, ingest full extracted text or exact relied-upon passages through `/Users/stewartbarteau/Desktop/Fraud-Predict Comp/src/rag_ingest.py`, including URL, title, year, and an evidence note.
