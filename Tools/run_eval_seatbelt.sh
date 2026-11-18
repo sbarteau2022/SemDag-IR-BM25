@@ -76,7 +76,7 @@ MODELS_YAML=Tools/local/models_local_8125.yaml
 # Record who serves port 8124. If a server is already up (for example the oMLX app, which
 # auto-starts on 8124), the runner reuses it: it is then NOT under the seatbelt profile and
 # its flags are whatever that process was started with. That provenance goes into run.log.
-EXISTING_8124="$(lsof -nP -iTCP:8124 -sTCP:LISTEN -Fpc 2>/dev/null | tr '\n' ' ')"
+EXISTING_8124="$( (lsof -nP -iTCP:8124 -sTCP:LISTEN -Fpc 2>/dev/null || true) | tr '\n' ' ')"
 if [[ -n "$EXISTING_8124" ]]; then
   echo "model server: REUSED existing listener on 8124 ($EXISTING_8124); not seatbelted by this runner" \
     | tee "$OUT/model_server_provenance.txt"

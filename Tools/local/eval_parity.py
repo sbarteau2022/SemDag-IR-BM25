@@ -9,6 +9,8 @@ unmodified CLI with the same arguments.
     eval_parity.py eval --tasks ... (same arguments as `swegemma eval`)
 
 SWEGEMMA_PARITY=0 turns the injection off (plain CLI behaviour) for A/B checks.
+SWEGEMMA_COMPACTION_THRESHOLD=<tokens> overrides token_threshold. Use it only for the gate
+that proves compaction fires locally; scored-parity runs keep the scorer's 14,336.
 The summarizer is left as None: ADK then builds LlmEventSummarizer from the root agent's
 own model (google/adk/apps/compaction.py), i.e. the same E4B.
 """
@@ -48,6 +50,8 @@ def install() -> None:
 
 def main(argv: list[str] | None = None) -> int:
     if os.environ.get("SWEGEMMA_PARITY", "1") != "0":
+        if os.environ.get("SWEGEMMA_COMPACTION_THRESHOLD"):
+            COMPACTION["token_threshold"] = int(os.environ["SWEGEMMA_COMPACTION_THRESHOLD"])
         install()
         print("eval_parity: events compaction "
               + ", ".join(f"{k}={v}" for k, v in COMPACTION.items())

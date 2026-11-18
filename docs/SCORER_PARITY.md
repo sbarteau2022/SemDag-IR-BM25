@@ -77,6 +77,13 @@ Status labels: **OFFICIAL** (rules page or staff), **DOCUMENTED** (HARNESS_READM
 | **Task repos** | Private repos | Training repos only | **GAP 6**: lane-per-repo tuning cannot transfer directly; generalization matters |
 | Setup inside the 12 h | Counts | Measured locally but not budgeted | GAP 7 (budget item) |
 
+## 5b. Additional parity facts (2026-11-17)
+
+- **Sampling defaults:** vLLM's default `--generation-config auto` fills any field a request leaves unset from the checkpoint's `generation_config.json`: `temperature 1.0, top_k 64, top_p 0.95`. ADK sends `temperature` and `top_p` from our configs but no `top_k`, so **every scorer call samples with top_k = 64**. Confirmed by the vllm-metal 0.33.0 log line on the same checkpoint (`results/server_bench/vllm_metal/serve_excerpt.log`).
+- **Thinking cut-off:** the scorer's `reasoning_end_str` is the bare `<channel|>`, so at the budget vLLM forces the end marker immediately, with no wrap-up phrase (vLLM reasoning-outputs docs).
+- **vllm-metal** (vLLM 0.33.0 on MLX) runs the scorer's exact flag set on the competition weights, but rejects `thinking_token_budget` (HTTP 400). Gates and throughput: `results/server_bench/vllm_metal/NOTES.md`.
+- **Compaction live check (run_19, rich_3468):** inconclusive. Peak prompt was 4,966 tokens, under the 14,336 threshold, so compaction never had cause to fire. Next: rerun with `SWEGEMMA_COMPACTION_THRESHOLD=3000`, for the check only.
+
 ## 6. Matching plan (proposed, not built)
 
 1. **GAP 1 compaction:** a small runner in `Tools/` that builds `EvalConfig` with the documented `EventsCompactionConfig` and `ContextCacheConfig` and calls the harness evaluator, used in place of the bare CLI. Test: compaction events appear in the traces of a long task.

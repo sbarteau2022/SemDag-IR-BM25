@@ -66,3 +66,39 @@ def test_eval_parity_keeps_explicit_config(tmp_path):
                      results_dir=tmp_path / "r", submission_dir=tmp_path,
                      models=ModelRegistry(), events_compaction_config=mine)
     assert cfg.events_compaction_config is mine
+
+
+# ---------------------------------------------------------------- streamed tool calls
+
+def _feed(acc, delta):
+    acc.feed({"choices": [{"delta": delta}]}, 0.0)
+
+
+def test_accumulator_merges_vllm_fragmented_tool_calls():
+    acc = llm_proxy.Accumulator(0.0)
+    _feed(acc, {"tool_calls": [{"id": "c1", "type": "function", "index": 0,
+                                "function": {"name": "read_file"}}]})
+    for frag in ('{"filepath": "', "src/", 'app.py"}'):
+        _feed(acc, {"tool_calls": [{"index": 0, "function": {"arguments": frag}}]})
+    _feed(acc, {"tool_calls": [{"id": "c2", "index": 1,
+                                "function": {"name": "get_status", "arguments": "{}"}}]})
+    calls = acc.response()["choices"][0]["message"]["tool_calls"]
+    assert [(c["id"], c["function"]["name"], c["function"]["arguments"]) for c in calls] == [
+        ("c1", "read_file", '{"filepath": "src/app.py"}'), ("c2", "get_status", "{}")]
+
+
+def test_accumulator_keeps_whole_tool_calls_without_index():
+    acc = llm_proxy.Accumulator(0.0)
+    for name in ("a", "b"):
+        _feed(acc, {"tool_calls": [{"id": name, "type": "function",
+                                    "function": {"name": name, "arguments": "{}"}}]})
+    assert [c["function"]["name"] for c in acc.response()["choices"][0]["message"]["tool_calls"]] \
+        == ["a", "b"]
+
+
+def test_accumulator_same_index_new_id_is_a_new_call():
+    acc = llm_proxy.Accumulator(0.0)
+    for cid in ("x", "y"):
+        _feed(acc, {"tool_calls": [{"id": cid, "index": 0,
+                                    "function": {"name": cid, "arguments": "{}"}}]})
+    assert [c["id"] for c in acc.response()["choices"][0]["message"]["tool_calls"]] == ["x", "y"]

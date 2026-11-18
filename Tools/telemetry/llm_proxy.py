@@ -47,6 +47,7 @@ class Accumulator:
         self.reasoning_key = "reasoning"   # echo the server's own field name back
         self.content: list[str] = []
         self.tool_calls: list[dict] = []
+        self._tc_by_index: dict[int, dict] = {}
         self.finish_reason = None
         self.usage: dict = {}
         self.meta: dict = {}
@@ -84,13 +85,41 @@ class Accumulator:
             if c:
                 self.content.append(c)
             for tc in tcs:
-                tc = dict(tc)
-                tc.pop("index", None)
-                self.tool_calls.append(tc)
+                self._merge_tool_call(tc)
             if (r or c or tcs) and self.ttft is None:
                 self.ttft = dt
             if choice.get("finish_reason"):
                 self.finish_reason = choice["finish_reason"]
+
+    def _merge_tool_call(self, tc: dict) -> None:
+        """Merge one streamed tool-call delta.
+
+        mlx_lm and oMLX send each call whole in one chunk. vLLM (and vllm-metal) send the
+        id and name first, then `function.arguments` in fragments that share an `index`.
+        Fragments with an index already seen are appended to that call; anything else
+        starts a new call.
+        """
+        idx = tc.get("index")
+        fn = tc.get("function") or {}
+        cur = self._tc_by_index.get(idx) if idx is not None else None
+        if cur is not None and tc.get("id") and cur.get("id") and tc["id"] != cur["id"]:
+            cur = None          # same index reused for a new, whole call: keep both
+        if cur is not None:
+            cfn = cur.setdefault("function", {})
+            if fn.get("name") and not cfn.get("name"):
+                cfn["name"] = fn["name"]
+            if fn.get("arguments"):
+                cfn["arguments"] = cfn.get("arguments", "") + fn["arguments"]
+            for k in ("id", "type"):
+                if tc.get(k) and not cur.get(k):
+                    cur[k] = tc[k]
+            return
+        call = {k: v for k, v in tc.items() if k not in ("index", "function")}
+        call["function"] = {"name": fn.get("name"), "arguments": fn.get("arguments") or ""}
+        call.setdefault("type", "function")
+        self.tool_calls.append(call)
+        if idx is not None:
+            self._tc_by_index[idx] = call
 
     def response(self) -> dict:
         message: dict = {"role": "assistant", "content": "".join(self.content) or None}
