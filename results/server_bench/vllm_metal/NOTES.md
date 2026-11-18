@@ -34,3 +34,9 @@ For comparison, oMLX 0.7.0 does 57.5 single-stream and 136 with 4 streams (2.3×
   (a) the proxy removes `thinking_token_budget` and enforces it itself: stream, count reasoning tokens, stop at the budget, then resume with `<channel|>` forced (the same behaviour as vLLM's processor);
   (b) keep oMLX as the default, where the budget works today.
 - oMLX stays the runner default until (a) is built and passes a budget gate.
+
+## Scope limits (checked 2026-11-17 after owner review)
+
+- **GGUF:** vllm-metal's GGUF path supports Qwen2, Qwen3, Llama, Mistral and Qwen3.5 only (docs `gguf/`). **Gemma 4 is not supported as GGUF**, and neither are MoE, vision, sharded GGUF or LoRA. Not relevant to us: we serve the MLX repack, never a GGUF.
+- **Temperature 0:** the greedy-only rule applies to **speculative decoding** (MTP/draft) only. "Other requests run without speculation" (docs `speculative_decoding/`). We do not enable speculation. Live check: temp 0 gave identical output ×2; temp 1.0 gave 3 different outputs ×3 (same prompt). Sampling works.
+- **Multimodal:** we serve text only. The vision/audio sidecar is not used and was not tested.
