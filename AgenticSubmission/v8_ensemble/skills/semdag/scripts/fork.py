@@ -42,7 +42,8 @@ def fork(argv):
     rel = E.wt_rel(k)
     sites = report.get("sites") or []
     out = {"k": k, "worktree": rel,
-           "rule": f"Edit ONLY files under {rel}/ (e.g. read_file('{rel}/<file>')). "
+           "rule": f"Change code ONLY with edit.py args [\"{k}\", \"<file>\", \"<old>\", \"<new>\"] "
+                   f"(it writes into {rel}). Read your copy with read_file('{rel}/<file>'). "
                    "Never edit the main workspace: the coordinator adopts the best copy."}
     if k <= len(sites) and k <= 3:
         s = dict(sites[k - 1])
@@ -62,8 +63,8 @@ def fork(argv):
     out["baseline_tests"] = {x: bt.get(x) for x in ("collected", "passed", "failed", "red_reason")}
     out["audit_args"] = ["--wt", str(k), "--repro", f"{run}python /tmp/repro_{k}.py"]
     out["next"] = (f"1) write /tmp/repro_{k}.py with run_command (heredoc) and run it with the "
-                   f"run_prefix (it must fail now); 2) edit {rel}/...; 3) run audit.py with "
-                   "audit_args; 4) end with one line: CANDIDATE <k> <decision>.")
+                   f"run_prefix (it must fail now); 2) fix with edit.py [\"{k}\", file, old, new]; "
+                   "3) run audit.py with audit_args; 4) end with one line: CANDIDATE <k> <decision>.")
     return out
 
 

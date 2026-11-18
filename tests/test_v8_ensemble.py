@@ -55,8 +55,8 @@ def run(script, repo, *args):
 
 
 def implement(repo, k, new):
-    f = repo / ".git" / f"wt_{k}" / "pkg" / "calc.py"
-    f.write_text(BUGGY.replace("return a - b", new))
+    out = run("edit.py", repo, str(k), "pkg/calc.py", "return a - b", new)
+    assert out.get("ok"), out
 
 
 def repro_cmd(repo, k):
@@ -101,7 +101,7 @@ def test_gate_ranks_correct_candidate_first_and_adopt_applies_it(repo):
         run("fork.py", repo, str(k), ISSUE)
     implement(repo, 1, "return a + b if a != 0 else -b")   # passes repro, fails the counterexample
     implement(repo, 2, "return a + b")                      # correct
-    implement(repo, 3, "return a +")                        # syntax error
+    (repo / ".git" / "wt_3" / "pkg" / "calc.py").write_text(BUGGY.replace("return a - b", "return a +"))  # syntax error (edit.py would refuse it)
     for k in (1, 2, 3):
         run("audit.py", repo, "--wt", str(k), "--repro", repro_cmd(repo, k))
     run("save_cex.py", repo, "1", "from pkg.calc import add\nassert add(0, 3) == 3")
@@ -132,3 +132,14 @@ def test_every_v8_yaml_parses_like_the_harness_loader():
     for f in sorted(sub.rglob("*.yaml")):
         data = yaml.load(f.read_text(), Loader=L)
         assert isinstance(data, dict), f
+
+
+def test_edit_writes_only_into_the_implementers_copy(repo):
+    run("fork.py", repo, "2", ISSUE)
+    for path in ("pkg/calc.py", "/workspace/pkg/calc.py", ".git/wt_3/pkg/calc.py"):
+        out = run("edit.py", repo, "2", path, "return a - b", "return a + b")
+        assert out.get("ok") or "not in the file" in json.dumps(out), out
+    assert "return a + b" in (repo / ".git" / "wt_2" / "pkg" / "calc.py").read_text()
+    assert (repo / "pkg" / "calc.py").read_text() == BUGGY       # main workspace untouched
+    assert not run("edit.py", repo, "2", "tests/test_calc.py", "assert", "pass").get("ok")
+    assert "fork.py first" in run("edit.py", repo, "4", "pkg/calc.py", "a", "b")["error"]

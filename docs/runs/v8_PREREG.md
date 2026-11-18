@@ -49,3 +49,10 @@ The rich lane, 5 tasks, all flat layout: rich_3468, rich_3180, rich_3296, rich_3
 2. How many of the 4 implementers produce a non-empty, unbroken candidate?
 3. Does the gate pick a better candidate than a single v7 executor would?
 4. Do adversarial counterexamples change any ranking?
+
+## Amendment 2026-11-18 (after run_20, before run_21)
+
+- **Thinking:** every thinking role has `thinking_budget: 0` and a literal `<|think|>` as the first line of its instruction (owner). No `thinking_token_budget` is sent, so the output caps (4096 / 6144) are the only bound.
+- **Server:** vllm-metal 0.33 with the scorer's vLLM flags (`SERVER=vllm_metal`), which became usable once no budget field is sent.
+- **Isolation fix:** implementers lose `edit_file` and change code only through `scripts/edit.py`, which always writes into `.git/wt_<k>`. This fixes run_20's 37 stray edits.
+- **run_21:** one task end to end (rich_3468), subprocess sandbox, owner request.

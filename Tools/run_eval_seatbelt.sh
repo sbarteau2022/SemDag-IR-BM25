@@ -72,7 +72,7 @@ PY
 SERVER="${SERVER:-omlx}"
 STARTED_SERVER=0
 MODELS_YAML=Tools/local/models_local_8125.yaml
-[[ "$SERVER" == omlx ]] && MODELS_YAML=Tools/local/models_local_omlx_8125.yaml
+[[ "$SERVER" == omlx || "$SERVER" == vllm_metal ]] && MODELS_YAML=Tools/local/models_local_omlx_8125.yaml
 # Record who serves port 8124. If a server is already up (for example the oMLX app, which
 # auto-starts on 8124), the runner reuses it: it is then NOT under the seatbelt profile and
 # its flags are whatever that process was started with. That provenance goes into run.log.
@@ -82,7 +82,10 @@ if [[ -n "$EXISTING_8124" ]]; then
     | tee "$OUT/model_server_provenance.txt"
 fi
 if ! curl -s -m 2 http://127.0.0.1:8124/v1/models >/dev/null; then
-  if [[ "$SERVER" == omlx ]]; then
+  if [[ "$SERVER" == vllm_metal ]]; then
+    # vllm-metal 0.33 with the scorer's vLLM flags (its own seatbelt profile allows local IPC).
+    Tools/local/serve_vllm_metal_kaggle.sh 8124 >"$OUT/model_server.log" 2>&1 &
+  elif [[ "$SERVER" == omlx ]]; then
     # oMLX 0.7.0 serves every model folder under --model-dir; ~/models/omlx_e4b holds only a
     # symlink to the E4B checkpoint. Its cache goes to a temp dir so ~/.omlx state is untouched.
     mkdir -p "$HOME/models/omlx_e4b" "$OUT/omlx_cache"
@@ -129,7 +132,7 @@ if [[ $SANDBOX = docker ]] && ! docker info >/dev/null 2>&1; then
   exit 4
 fi
 # The oMLX paged SSD cache grows to ~18 GB per 5-task run; it is scratch, so remove it.
-cleanup() { kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true; rm -rf "$OUT/omlx_cache"; }
+cleanup() { kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true; rm -rf "$OUT/omlx_cache"; [[ $SERVER = vllm_metal && $STARTED_SERVER = 1 ]] && pkill -f "vllm serve" || true; }
 trap cleanup EXIT
 
 echo "run $RUN_ID: budget timeout=$TS calls=$CALLS minutes=$MINS turns=$TURNS" | tee "$OUT/run.log"

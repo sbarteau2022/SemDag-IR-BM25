@@ -59,7 +59,8 @@ def test_active_submission_uses_competition_budgets(name):
 
 def test_v8_ensemble_caps():
     """v8 (owner design 2026-11-17): 4k hard caps for implementers/adversaries, 6k for the
-    coordinator and final implementer; thinking leaves room for the action inside the cap."""
+    coordinator and final implementer. Thinking comes from a literal <|think|> (owner 2026-11-18):
+    thinking_budget 0, so no thinking_token_budget is sent and the output cap is the only bound."""
     sub = ROOT / "AgenticSubmission" / "v8_ensemble"
     if not sub.exists():
         pytest.skip("not built")
@@ -68,7 +69,10 @@ def test_v8_ensemble_caps():
     for name, cap in caps.items():
         d = yaml.safe_load((sub / "configs" / name).read_text())
         assert d["max_output_tokens"] == cap, name
-        assert d["thinking_config"]["thinking_budget"] <= cap - 1024, name
+        assert d["thinking_config"]["thinking_budget"] == 0, name   # thinking via <|think|>
     ev = yaml.safe_load((sub / "eval_config.yaml").read_text())["evaluation"]
     assert (ev["max_time_minutes"], ev["timeout_seconds"], ev["max_tool_calls"], ev["max_turns"]) \
         == (4, 300, 100, 500)
+
+    for prompt in ("implementer_1.md", "adversary_1.md", "coordinator.md", "finalizer.md"):
+        assert (sub / "prompts" / prompt).read_text().startswith("<|think|>"), prompt

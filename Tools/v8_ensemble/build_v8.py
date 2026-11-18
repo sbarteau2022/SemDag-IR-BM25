@@ -5,7 +5,10 @@
 Owner design (2026-11-17): army script + 4 implementers (4k hard output cap each, parallel),
 4 adversarial reviewers (4k each, parallel), a coordinator (6k: pytest, static typecheck, code
 review over every candidate) and a final implementer (6k: adopt, fix, last test run, submit).
-vLLM counts thinking inside max_tokens, so thinking is 3072 under a 4096 cap and 4096 under 6144.
+Thinking (owner, 2026-11-18): every thinking role has thinking_budget 0, so the harness sends no
+thinking_token_budget (vllm-metal rejects it), and a literal <|think|> as the first line of the role
+instruction turns Gemma 4 thinking on. The hard output cap (4096 / 6144) is the only bound.
+Implementers edit only through scripts/edit.py, which always writes into their own copy.
 The generated directory is overwritten on every build; edit the sources here, not the output.
 """
 import json
@@ -29,6 +32,7 @@ All calls go through `run_skill_script` with `skill_name: semdag`. Every script 
 | file_path | args | Use |
 |---|---|---|
 | `scripts/fork.py` | `["<k>", "<problem statement>"]` | Implementer k: own copy at `.git/wt_<k>`, start site with exact source, `run_prefix`, `test_cmd`, `audit_args` |
+| `scripts/edit.py` | `["<k>", "<file>", "<old>", "<new>"]` | Implementer k's only edit tool: always writes into `.git/wt_<k>` (rescue refs `@1`, `L120-126` as fix_edit) |
 | `scripts/audit.py` | `["--wt", "<k>", "--repro", cmd]` or `["--repro", cmd]` | Sign-off for copy k, or for the main workspace. `decision`: submit / submit_best / revise |
 | `scripts/review_pack.py` | `["<k>"]` | Reviewer: candidate k's diff, files and self-audit |
 | `scripts/save_cex.py` | `["<k>", "<python code>"]` | Reviewer: save a counterexample (asserts the correct behaviour) |
@@ -39,18 +43,20 @@ All calls go through `run_skill_script` with `skill_name: semdag`. Every script 
 Repro files belong in `/tmp`, created with `run_command` (heredoc). `write_file` to `/tmp/...` lands inside the repository, because the harness strips the leading `/`.
 """
 
-IMPLEMENTER = """You are implementer {k} of 4. All four fix the same issue independently, each in its own copy of the repository; the best copy wins. You have at most 10 tool calls.
+THINK = "<|think|>\n"
+
+IMPLEMENTER = THINK + """You are implementer {k} of 4. All four fix the same issue independently, each in its own copy of the repository; the best copy wins. You have at most 10 tool calls.
 
 1. Call run_skill_script(skill_name="semdag", file_path="scripts/fork.py", args=["{k}", "<the whole problem statement>"]). It creates your copy `.git/wt_{k}` and gives your start site with its exact source, `run_prefix`, `test_cmd` and `audit_args`.
 2. Reproduce: create `/tmp/repro_{k}.py` with run_command (heredoc), importing the package and asserting the CORRECT behaviour from the issue. Run it with `run_prefix` (e.g. `<run_prefix>python /tmp/repro_{k}.py`). It must fail now.
-3. Fix: edit ONLY files under `.git/wt_{k}/` with edit_file (paths start with `.git/wt_{k}/`). Read the exact lines first. Make the smallest change at the root cause. Never edit test files.
+3. Fix: read the exact lines of your copy with read_file(".git/wt_{k}/<file>"), then change them ONLY with run_skill_script(skill_name="semdag", file_path="scripts/edit.py", args=["{k}", "<file path as in the repo>", "<exact old text>", "<new text>"]). It always writes into your copy. If it answers with a block reference such as "@1", call it again with "@1" as the old text. Make the smallest change at the root cause. Never edit test files.
 4. Run the repro again with `run_prefix`. It must pass.
 5. Call run_skill_script(skill_name="semdag", file_path="scripts/audit.py", args=<audit_args from fork>). If the decision is `revise` and you have calls left, fix once more and audit again.
 6. End with exactly one line: CANDIDATE {k} <audit decision> <one-sentence summary of the change>.
 
-Rules: never edit the main workspace (paths without `.git/wt_{k}/`); never run the full test suite (use `test_cmd`); create files only under /tmp and only with run_command."""
+Rules: change code only with edit.py; never run the full test suite (use `test_cmd`); create files only under /tmp and only with run_command."""
 
-ADVERSARY = """You are adversarial reviewer {k}. Your target is candidate {k}, a fix for the issue written by implementer {k}. You have at most 3 tool calls and you never edit files.
+ADVERSARY = THINK + """You are adversarial reviewer {k}. Your target is candidate {k}, a fix for the issue written by implementer {k}. You have at most 3 tool calls and you never edit files.
 
 1. Call run_skill_script(skill_name="semdag", file_path="scripts/review_pack.py", args=["{k}"]).
 2. If the candidate is empty, end with: NONE {k} empty.
@@ -58,14 +64,14 @@ ADVERSARY = """You are adversarial reviewer {k}. Your target is candidate {k}, a
 4. Write ONE counterexample: a short standalone Python script that imports the package and asserts the CORRECT behaviour from the issue on that input. Save it with run_skill_script(skill_name="semdag", file_path="scripts/save_cex.py", args=["{k}", "<the code>"]). If it reports a syntax error, fix it and save once more.
 5. End with exactly one line: CEX {k} <what the counterexample checks>, or NONE {k} <why no counterexample exists>."""
 
-COORDINATOR = """You are the coordinator. Four implementers wrote candidate fixes in `.git/wt_1` .. `.git/wt_4`, and four adversarial reviewers saved counterexamples. You make one tool call and never edit files.
+COORDINATOR = THINK + """You are the coordinator. Four implementers wrote candidate fixes in `.git/wt_1` .. `.git/wt_4`, and four adversarial reviewers saved counterexamples. You make one tool call and never edit files.
 
 1. Call run_skill_script(skill_name="semdag", file_path="scripts/gate.py", args=[]). It runs pytest, the static typecheck and the code review on every candidate, runs every counterexample against every candidate, and ranks them.
 2. Answer with:
    - first line: WINNER <k> (the gate's winner, unless its data clearly shows another candidate is better), or WINNER none if every candidate is empty;
    - then at most 5 short lines: the winner's open problems (static errors, review issues, failing tests, failing counterexamples) and which other candidate, if any, handled them, so the final implementer can fix them."""
 
-FINALIZER = """You are the final implementer. The coordinator's verdict:
+FINALIZER = THINK + """You are the final implementer. The coordinator's verdict:
 
 {gate_verdict?}
 
@@ -78,14 +84,14 @@ You work in the main workspace (paths WITHOUT `.git/wt_`). You have at most 12 t
 5. Call submit_patch at most once. Never edit test files. End with one line: SUBMITTED <k> or NO PATCH <reason>."""
 
 SAMPLING = {
-    "sampling_implement.yaml": ("Implementers: diverse (temperature 1.0), 4k hard output cap; thinking 3072 leaves ~1k for the action.",
-                                "temperature: 1.0\ntop_p: 0.95\npresence_penalty: 0.3\nfrequency_penalty: 0.2\nmax_output_tokens: 4096\nthinking_config:\n  thinking_budget: 3072\n  include_thoughts: true\n"),
-    "sampling_adversary.yaml": ("Adversarial reviewers: 4k hard output cap; thinking 3072.",
-                                "temperature: 0.2\ntop_p: 0.95\nmax_output_tokens: 4096\nthinking_config:\n  thinking_budget: 3072\n  include_thoughts: true\n"),
-    "sampling_coordinator.yaml": ("Coordinator: 6k hard output cap; thinking 4096.",
-                                  "temperature: 0.0\ntop_p: 1.0\nmax_output_tokens: 6144\nthinking_config:\n  thinking_budget: 4096\n  include_thoughts: true\n"),
-    "sampling_final.yaml": ("Final implementer: 6k hard output cap; thinking 4096.",
-                            "temperature: 0.0\ntop_p: 1.0\nmax_output_tokens: 6144\nthinking_config:\n  thinking_budget: 4096\n  include_thoughts: true\n"),
+    "sampling_implement.yaml": ("Implementers: diverse (temperature 1.0), 4k hard output cap; thinking via <|think|>, no thinking_token_budget.",
+                                "temperature: 1.0\ntop_p: 0.95\npresence_penalty: 0.3\nfrequency_penalty: 0.2\nmax_output_tokens: 4096\nthinking_config:\n  thinking_budget: 0\n  include_thoughts: true\n"),
+    "sampling_adversary.yaml": ("Adversarial reviewers: 4k hard output cap; thinking via <|think|>.",
+                                "temperature: 0.2\ntop_p: 0.95\nmax_output_tokens: 4096\nthinking_config:\n  thinking_budget: 0\n  include_thoughts: true\n"),
+    "sampling_coordinator.yaml": ("Coordinator: 6k hard output cap; thinking via <|think|>.",
+                                  "temperature: 0.0\ntop_p: 1.0\nmax_output_tokens: 6144\nthinking_config:\n  thinking_budget: 0\n  include_thoughts: true\n"),
+    "sampling_final.yaml": ("Final implementer: 6k hard output cap; thinking via <|think|>.",
+                            "temperature: 0.0\ntop_p: 1.0\nmax_output_tokens: 6144\nthinking_config:\n  thinking_budget: 0\n  include_thoughts: true\n"),
 }
 
 
@@ -120,7 +126,7 @@ def build():
         write(f"sub_agents/implementer_{k}.yaml", agent_yaml(
             f"implementer_{k}", f"Implementer {k} of 4: fixes the issue in its own copy .git/wt_{k}.",
             f"implementer_{k}.md", "sampling_implement.yaml",
-            ["read_file", "edit_file", "run_command"], f"cand_{k}"))
+            ["read_file", "run_command"], f"cand_{k}"))
         write(f"sub_agents/adversary_{k}.yaml", agent_yaml(
             f"adversary_{k}", f"Adversarial reviewer {k}: writes a counterexample for candidate {k}.",
             f"adversary_{k}.md", "sampling_adversary.yaml", ["read_file"], f"cex_{k}"))

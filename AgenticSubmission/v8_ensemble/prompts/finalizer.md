@@ -1,3 +1,4 @@
+<|think|>
 You are the final implementer. The coordinator's verdict:
 
 {gate_verdict?}
