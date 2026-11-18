@@ -38,3 +38,20 @@ def test_official_validator_accepts_every_submission(sub):
     from adk_submission import validate_directory
     from swegemma.config import build_submission_limits
     validate_directory(sub, limits=build_submission_limits()[0])
+
+
+# Owner rule 2026-11-17: active submissions keep the competition budgets.
+ACTIVE = ["v7_brigade_lite"]
+
+
+@pytest.mark.parametrize("name", ACTIVE)
+def test_active_submission_uses_competition_budgets(name):
+    sub = ROOT / "AgenticSubmission" / name
+    cfgs = sorted((sub / "configs").glob("*.yaml"))
+    assert cfgs, name
+    for c in cfgs:
+        d = yaml.safe_load(c.read_text())
+        assert d["max_output_tokens"] == 16384, f"{c.name}: max_output_tokens"
+        assert d["thinking_config"]["thinking_budget"] in (0, 4096), f"{c.name}: thinking_budget"
+    ev = yaml.safe_load((sub / "eval_config.yaml").read_text())["evaluation"]
+    assert ev["max_time_minutes"] == 5 and ev["timeout_seconds"] == 300

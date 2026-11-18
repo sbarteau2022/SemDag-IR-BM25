@@ -70,8 +70,8 @@ submission.zip
    - If the cumulative runtime exceeds 12 hours, **the entire submission errors and scores 0.0**.
    - **MANDATORY**: You must include `eval_config.yaml` with explicit bounds:
      ```yaml
-     evaluation:              # canonical, from AgenticSubmission/v6_1_budget/eval_config.yaml
-       timeout_seconds: 120   # per shell command
+     evaluation:              # canonical, from AgenticSubmission/v7_brigade_lite/eval_config.yaml
+       timeout_seconds: 300   # per shell command (competition default; capped at time left)
        max_tool_calls: 40     # observed v6 max 15
        max_time_minutes: 5    # 720 - ~10 vLLM start - ~30 setup = 680 min / 120 tasks = 5.67
        max_turns: 60
@@ -155,7 +155,7 @@ sequenceDiagram
 - Multi-adapter routing: Bind `adapter: main_lora` to the primary coder and `adapter: search_lora` to the exploration agent.
 
 ### E. Sampling Hyperparameters (`configs/sampling.yaml`)
-- `temperature: 0.2`, `top_p: 0.95`, `max_output_tokens: 8192`, `thinking_config: {thinking_budget: 4096, include_thoughts: true}` (canonical, `AgenticSubmission/v6_1_budget/configs/sampling.yaml`; 1,413 recorded steps peak at 5,501 output tokens, so 8,192 never truncates but bounds a runaway call). `thinking_budget` is enforced by the scorer's vLLM, not by local MLX; `include_thoughts: true` keeps thoughts in later turns' context. Omit `thinking_level` with vLLM LoRA endpoints.
+- `temperature: 0.2`, `top_p: 0.95`, `max_output_tokens: 16384`, `thinking_config: {thinking_budget: 4096, include_thoughts: true}` (competition defaults). **Owner rule (2026-11-17), do not ask to change:** output and thinking budgets stay at the competition defaults, `max_output_tokens: 16384` and `thinking_budget: 4096` for every role that thinks (a role may keep thinking off). Per-task time comes from the 12 h limit: `max_time_minutes: 5`. Command timeout: competition default `300` s, which the harness caps at the time left. vLLM 0.33 clamps `max_tokens` to the remaining context (a 20,014-token prompt with 16,384 requested returned 200), so 16,384 is safe. `thinking_budget` is enforced by the scorer's vLLM, not by local MLX; `include_thoughts: true` keeps thoughts in later turns' context. Omit `thinking_level` with vLLM LoRA endpoints.
 
 ---
 

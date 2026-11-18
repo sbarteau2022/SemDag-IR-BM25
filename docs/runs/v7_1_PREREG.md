@@ -76,3 +76,17 @@ The 11 lane tasks, in this order: requests_7427, requests_7502, requests_7505, r
 ## 9. Cost
 
 33 task runs at about 5 min plus setup, roughly 3 h of machine time. Run as three sequential lane passes (R, A, B) with a lane report after each.
+
+## Amendment 2026-11-17 (owner rule on budgets, before any v7.1 build or run)
+
+Owner rule: output and thinking budgets stay at the competition defaults, and the owner is not to be asked again. Every arm now uses:
+- `max_output_tokens: 16384` for every role, and `thinking_budget: 4096` for every role that thinks. The auditor keeps thinking off by design.
+- `eval_config`: `timeout_seconds 300` (competition default; the harness caps it at the time left), `max_tool_calls 40`, `max_time_minutes 5` (from the 12 h limit), `max_turns 60`.
+
+Effect on the arms:
+- **R** = v7 with these budgets (committed to `v7_brigade_lite`). The executor cap rises from 1024 to 4096, and output limits rise to 16384.
+- **A** = prompt allowances (planner ~2,000, executor ~1,000) with the 4096 cap as a safety net. This replaces "executor 2048".
+- **B** = `thinking_budget: 0` + `<|think|>` + prompt allowances, with `max_output_tokens 16384` (not 4096). Gate G3 is unchanged.
+- **G2** now reads: cap-hit rate (thinking ≥ 4088) < 2% of planner+executor thinking steps; executor thinking p50 ≤ 1,000.
+
+Evidence that 16384 is safe at a 32,768 context: vLLM 0.33 (vllm-metal) clamps `max_tokens` to the remaining context. A 20,014-token prompt with `max_tokens 16384` returned HTTP 200, and `max_tokens 32768` on a short prompt also returned 200. The scorer's vLLM version is not published.
