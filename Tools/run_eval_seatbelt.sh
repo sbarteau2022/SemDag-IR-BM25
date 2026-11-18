@@ -128,7 +128,8 @@ if [[ $SANDBOX = docker ]] && ! docker info >/dev/null 2>&1; then
   kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true
   exit 4
 fi
-cleanup() { kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true; }
+# The oMLX paged SSD cache grows to ~18 GB per 5-task run; it is scratch, so remove it.
+cleanup() { kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true; rm -rf "$OUT/omlx_cache"; }
 trap cleanup EXIT
 
 echo "run $RUN_ID: budget timeout=$TS calls=$CALLS minutes=$MINS turns=$TURNS" | tee "$OUT/run.log"
