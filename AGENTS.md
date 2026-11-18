@@ -5,6 +5,14 @@ Goal: Top 3 on the main leaderboard AND win the **$10,000 Small Model Bonus Priz
 
 ---
 
+<!-- session-start:begin -->
+## 0. Session Start (owner rule, 2026-11-18)
+
+**Read [README.md](README.md) first, every session**, then [CHECKPOINT.md](CHECKPOINT.md) and [MEMORY.md](MEMORY.md). This folder is the source of truth: it is a git repo with no remote, and GitHub is behind it.
+
+Current state in one paragraph: v6_impact (7/23 on paired23, local MLX) is the best measured and is frozen as the reference. v7 tied it. v8_ensemble scored 0/5 and times out at the 4-minute budget locally. No Kaggle submission has been made. Nov 25 is entry and rules acceptance; Dec 2 is the final deadline. Budget is fixed by the owner at 4 min/task with the competition-default token budgets. Never tune or train on the public tasks. Update README.md and MEMORY.md at the end of every session.
+<!-- session-start:end -->
+
 ## 1. Deadlines & Milestones (11:59 PM UTC)
 - **Paper Track**: Nov 12, 2026 (*Passed*).
 - **Entry & Team Merger Deadline**: **Nov 25, 2026** (Accept competition rules & finalize team before this date).
@@ -165,18 +173,20 @@ flowchart LR
 ```
 
 ### Local Development Loop (Apple Silicon):
-1. **Local Model Server**: `Tools/serve_e4b_mlx.sh` serves the 4-bit MLX model at `http://127.0.0.1:8123/v1` (`~/models/gemma-4-e4b-it-qat-w4a16-mlx`).
+1. **Local Model Server** (legacy; current server is vllm-metal, see below): `Tools/serve_e4b_mlx.sh` serves the 4-bit MLX model at `http://127.0.0.1:8123/v1` (`~/models/gemma-4-e4b-it-qat-w4a16-mlx`).
 2. **Validation, local scored-style runs and tests**:
    ```bash
    # Validate a submission directory
    .venv-harness/bin/python -c "from pathlib import Path; from adk_submission import validate_directory; from swegemma.config import build_submission_limits; validate_directory(Path('AgenticSubmission/v6_1_budget'), limits=build_submission_limits()[0])"
    # Scored-style local run: no network (macOS seatbelt), Docker Desktop (never Colima),
-   # MLX server on 8124 behind the telemetry proxy on 8125, budget read from the
+   # vllm-metal server (SERVER=vllm_metal) on 8124 behind the telemetry proxy on 8125, budget read from the
    # submission's eval_config.yaml. Post-run: SQLite ingest, TELEMETRY.md, baked Docker image.
    Tools/run_eval_seatbelt.sh AgenticSubmission/v6_1_budget results/<run_dir> <ids_file> <run_id> <arm>
    # Tests
    .venv-harness/bin/python -m pytest
    ```
+   **Local model server: vllm-metal** (vLLM 0.33 on MLX, owner decision 2026-11-18), launched by `Tools/local/serve_vllm_metal_kaggle.sh` with the scorer's vLLM flags on the competition weights, port 8124, behind the telemetry proxy on 8125. Run the runner with `SERVER=vllm_metal` (its default is still `omlx`). Known gap: vllm-metal rejects `thinking_token_budget` (HTTP 400), so the thinking budget is not enforced locally; use a literal `<|think|>` in the role prompt. Gates and throughput: `results/server_bench/vllm_metal/NOTES.md`. The scorer is patched vLLM 0.19.1 on 4x L4, so local timing still does not predict it.
+
    Port 8123 is sometimes held by a ClickHouse container on this machine; local runs use 8124 (model) and 8125 (proxy). Telemetry docs: `Tools/telemetry/README.md`.
    *Note*: Local Docker memory is 8 GB; each container takes 4 GiB, so maintain concurrency at 1 or 2.
 
