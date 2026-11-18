@@ -191,8 +191,18 @@ def enforce_thinking_budget(body: dict, field: str | None) -> dict:
     return body
 
 
+def fill_generation_defaults(body: dict, top_k: int | None) -> dict:
+    """vLLM's default `--generation-config auto` fills unset sampling fields from the checkpoint's
+    generation_config.json (temperature 1.0, top_k 64, top_p 0.95). ADK never sends top_k, so on
+    the scorer every call samples with top_k 64. Mirror that locally when a request has no top_k."""
+    if top_k and "top_k" not in body:
+        body = dict(body)
+        body["top_k"] = int(top_k)
+    return body
+
+
 def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
-                 budget_field: str | None = None):
+                 budget_field: str | None = None, default_top_k: int | None = None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -229,7 +239,8 @@ def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
             row = {"run_id": run_id, "call_id": uuid.uuid4().hex, "wall_start": wall,
                    "req_bytes": len(raw), **request_fields(body)}
             client_stream = bool(body.get("stream"))
-            up = enforce_thinking_budget(dict(body), budget_field)
+            up = fill_generation_defaults(enforce_thinking_budget(dict(body), budget_field),
+                                          default_top_k)
             row["enforced_thinking_budget"] = up.get(budget_field) if budget_field else None
             up["stream"] = True
             up["stream_options"] = {"include_usage": True}
@@ -317,12 +328,12 @@ def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
 
 
 def serve(listen: int, upstream: str, db_path: str, run_id: str, timeout: float = 900.0,
-          budget_field: str | None = None):
+          budget_field: str | None = None, default_top_k: int | None = None):
     host, port = upstream.rsplit(":", 1)
     con = tdb.connect(db_path)
     httpd = ThreadingHTTPServer(("127.0.0.1", listen),
                                 make_handler((host, int(port)), con, run_id, timeout,
-                                             budget_field))
+                                             budget_field, default_top_k))
     httpd.daemon_threads = True
     return httpd
 
@@ -336,8 +347,11 @@ def main():
     ap.add_argument("--timeout", type=float, default=900.0)
     ap.add_argument("--thinking-budget-field", default=None,
                     help="copy thinking_token_budget into this request field (oMLX: thinking_budget)")
+    ap.add_argument("--default-top-k", type=int, default=None,
+                    help="fill top_k when a request omits it (scorer: 64 from generation_config)")
     a = ap.parse_args()
-    httpd = serve(a.listen, a.upstream, a.db, a.run_id, a.timeout, a.thinking_budget_field)
+    httpd = serve(a.listen, a.upstream, a.db, a.run_id, a.timeout, a.thinking_budget_field,
+                  a.default_top_k)
     print(f"llm_proxy: 127.0.0.1:{a.listen} -> {a.upstream} run_id={a.run_id} db={a.db} "
           f"thinking_budget_field={a.thinking_budget_field}", flush=True)
     httpd.serve_forever()

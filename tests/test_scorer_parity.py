@@ -102,3 +102,9 @@ def test_accumulator_same_index_new_id_is_a_new_call():
         _feed(acc, {"tool_calls": [{"id": cid, "index": 0,
                                     "function": {"name": cid, "arguments": "{}"}}]})
     assert [c["id"] for c in acc.response()["choices"][0]["message"]["tool_calls"]] == ["x", "y"]
+
+
+def test_fill_generation_defaults_top_k():
+    assert llm_proxy.fill_generation_defaults({}, 64)["top_k"] == 64
+    assert llm_proxy.fill_generation_defaults({"top_k": 5}, 64)["top_k"] == 5
+    assert "top_k" not in llm_proxy.fill_generation_defaults({}, None)

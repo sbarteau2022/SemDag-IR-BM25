@@ -109,8 +109,9 @@ fi
 # Scorer parity (docs/SCORER_PARITY.md): oMLX reads the thinking budget from `thinking_budget`,
 # not ADK's `thinking_token_budget`, so the proxy copies it across (GAP 2). Compaction and the
 # context cache are switched on by Tools/local/eval_parity.py (GAP 1; SWEGEMMA_PARITY=0 = off).
-PROXY_ARGS=()
-[[ $SERVER = omlx ]] && PROXY_ARGS=(--thinking-budget-field thinking_budget)
+# --default-top-k 64: the scorer's vLLM fills unset top_k from generation_config.json (parity P1).
+PROXY_ARGS=(--default-top-k 64)
+[[ $SERVER = omlx ]] && PROXY_ARGS+=(--thinking-budget-field thinking_budget)
 sandbox-exec -f "$SB" "$ROOT/.venv-harness/bin/python" Tools/telemetry/llm_proxy.py \
   --listen 8125 --upstream 127.0.0.1:8124 --db "$DB" --run-id "$RUN_ID" \
   "${PROXY_ARGS[@]}" >"$OUT/llm_proxy.log" 2>&1 &
@@ -121,7 +122,8 @@ if ! curl -s -m 2 http://127.0.0.1:8125/v1/models >/dev/null; then
   kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true
   exit 3
 fi
-if ! docker info >/dev/null 2>&1; then
+SANDBOX="${SANDBOX:-docker}"   # docker | subprocess (no VM; owner rule: no Docker unless approved)
+if [[ $SANDBOX = docker ]] && ! docker info >/dev/null 2>&1; then
   echo "ABORT: Docker daemon not reachable (DOCKER_HOST=${DOCKER_HOST:-unset})" | tee "$OUT/run.log" >&2
   kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true
   exit 4
@@ -134,7 +136,7 @@ set +e
 OPENAI_BASE_URL=http://127.0.0.1:8125/v1 OPENAI_API_KEY=EMPTY TMPDIR="$HARNESS_TMP" sandbox-exec -f "$SB" \
   .venv-harness/bin/python Tools/local/eval_parity.py eval \
   --tasks "$TASKS" --snapshots-dir DataSets/public/data/snapshots \
-  --submission-dir "$SUB" --results-dir "$OUT" --sandbox docker --concurrency 1 \
+  --submission-dir "$SUB" --results-dir "$OUT" --sandbox "$SANDBOX" --concurrency 1 \
   --task-ids $(cat "$IDS") --models-yaml "$MODELS_YAML" \
   --max-tool-calls "$CALLS" --max-time-minutes "$MINS" --max-turns "$TURNS" \
   --timeout-seconds "$TS" --display quiet >>"$OUT/run.log" 2>&1
@@ -149,5 +151,9 @@ cleanup; trap - EXIT
   --functions | tee -a "$OUT/run.log"
 .venv-harness/bin/python Tools/telemetry/report.py --db "$DB" --run-id "$RUN_ID" \
   --out "$OUT/TELEMETRY.md" >/dev/null
-Tools/telemetry/bake_image.sh "$RUN_ID" "$OUT" | tee -a "$OUT/run.log"
+if [[ $SANDBOX = docker ]]; then
+  Tools/telemetry/bake_image.sh "$RUN_ID" "$OUT" | tee -a "$OUT/run.log"
+else
+  echo "subprocess sandbox: no Docker image baked; run files stay in $OUT" | tee -a "$OUT/run.log"
+fi
 exit $RC

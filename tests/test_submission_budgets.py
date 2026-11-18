@@ -55,3 +55,20 @@ def test_active_submission_uses_competition_budgets(name):
         assert d["thinking_config"]["thinking_budget"] in (0, 4096), f"{c.name}: thinking_budget"
     ev = yaml.safe_load((sub / "eval_config.yaml").read_text())["evaluation"]
     assert ev["max_time_minutes"] == 4 and ev["timeout_seconds"] == 300
+
+
+def test_v8_ensemble_caps():
+    """v8 (owner design 2026-11-17): 4k hard caps for implementers/adversaries, 6k for the
+    coordinator and final implementer; thinking leaves room for the action inside the cap."""
+    sub = ROOT / "AgenticSubmission" / "v8_ensemble"
+    if not sub.exists():
+        pytest.skip("not built")
+    caps = {"sampling_implement.yaml": 4096, "sampling_adversary.yaml": 4096,
+            "sampling_coordinator.yaml": 6144, "sampling_final.yaml": 6144}
+    for name, cap in caps.items():
+        d = yaml.safe_load((sub / "configs" / name).read_text())
+        assert d["max_output_tokens"] == cap, name
+        assert d["thinking_config"]["thinking_budget"] <= cap - 1024, name
+    ev = yaml.safe_load((sub / "eval_config.yaml").read_text())["evaluation"]
+    assert (ev["max_time_minutes"], ev["timeout_seconds"], ev["max_tool_calls"], ev["max_turns"]) \
+        == (4, 300, 100, 500)
