@@ -69,7 +69,7 @@ submission.zip
      evaluation:              # canonical, from AgenticSubmission/v7_brigade_lite/eval_config.yaml
        timeout_seconds: 300   # per shell command (competition default; capped at time left)
        max_tool_calls: 40     # observed v6 max 15
-       max_time_minutes: 5    # 720 - ~10 vLLM start - ~30 setup = 680 min / 120 tasks = 5.67
+       max_time_minutes: 4    # owner rule 2026-11-17 (12 h ceiling is 5.67 after ~10 vLLM start + ~30 setup)
        max_turns: 60
      ```
      The harness enforces `max_time_minutes` with `asyncio.timeout` around the whole agent run, so an in-flight model call cannot overrun it.
@@ -88,7 +88,7 @@ submission.zip
 ### What CAN and SHOULD Be Optimized (The Performance Levers):
 1. **Prompts & Reasoning Architecture**:
    - Root instructions in `prompts/system.md` (test-driven reproduction, strict code inspection before editing).
-   - `generate_content_config`: `temperature: 0.2`, `top_p: 0.95`, `max_output_tokens: 16384`, `thinking_config: {thinking_budget: 4096, include_thoughts: true}` (competition defaults). **Owner rule (2026-11-17), do not ask to change:** output and thinking budgets stay at the competition defaults, `max_output_tokens: 16384` and `thinking_budget: 4096` for every role that thinks (a role may keep thinking off). Per-task time comes from the 12 h limit: `max_time_minutes: 5`. Command timeout: competition default `300` s, which the harness caps at the time left. vLLM 0.33 clamps `max_tokens` to the remaining context (a 20,014-token prompt with 16,384 requested returned 200), so 16,384 is safe. `thinking_budget` is enforced by the scorer's vLLM, not by local MLX; `include_thoughts: true` keeps thoughts in later turns' context. Omit `thinking_level` with vLLM LoRA endpoints.
+   - `generate_content_config`: `temperature: 0.2`, `top_p: 0.95`, `max_output_tokens: 16384`, `thinking_config: {thinking_budget: 4096, include_thoughts: true}` (competition defaults). **Owner rule (2026-11-17), do not ask to change:** output and thinking budgets stay at the competition defaults, `max_output_tokens: 16384` and `thinking_budget: 4096` for every role that thinks (a role may keep thinking off). Per-task time: `max_time_minutes: 4` (owner rule; the 12 h ceiling allows up to 5). Command timeout: competition default `300` s, which the harness caps at the time left. The scorer runs a patched vLLM 0.19.1 (staff, 2026-09-28 and 2026-10-15); its `get_max_tokens` clamps `max_tokens` to the remaining context and only rejects a prompt that alone exceeds 32,768. Live on vLLM 0.33 (vllm-metal): a 20,014-token prompt with 16,384 requested returned 200. So 16,384 is safe. `thinking_budget` is enforced by the scorer's vLLM, not by local MLX; `include_thoughts: true` keeps thoughts in later turns' context. Omit `thinking_level` with vLLM LoRA endpoints.
 2. **Sub-Agent Decomposition (`sub_agents/`)**:
    - Wrap deep exploratory code searches in an `agent_tool` with `skip_summarization: true` to protect the root agent's 32,768-token context window.
 3. **ADK Skills (`skills/`)**:

@@ -1,6 +1,6 @@
 # vllm-metal 0.33.0 / vLLM 0.33.0: `vllm serve` flag inventory
 
-Source: `vllm serve --help=all` on this Mac (raw: `vllm_serve_help_all.txt`, parsed: `flags.json`). **320 flags in 18 groups.** Defaults are vLLM 0.33.0 defaults as printed; the scorer's vLLM version is not published, so its defaults may differ.
+Source: `vllm serve --help=all` on this Mac (raw: `vllm_serve_help_all.txt`, parsed: `flags.json`). **320 flags in 18 groups.** Defaults are vLLM 0.33.0 defaults as printed. **The scorer runs a patched vLLM 0.19.1** (staff Holbrook, 2026-09-28 and 2026-10-15, `Rules/Verbatim/forum-staff-posts.md`), so its defaults may differ from these.
 
 Parity column: **SCORER-SET** = passed by the scoring notebook (`adk_submission/server.py` `VllmServer.build_cmd`); **SCORER-DEFAULT** = not passed, so the default decides scorer behaviour; blank = no bearing found on the scorer path.
 

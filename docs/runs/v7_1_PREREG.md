@@ -89,4 +89,8 @@ Effect on the arms:
 - **B** = `thinking_budget: 0` + `<|think|>` + prompt allowances, with `max_output_tokens 16384` (not 4096). Gate G3 is unchanged.
 - **G2** now reads: cap-hit rate (thinking ≥ 4088) < 2% of planner+executor thinking steps; executor thinking p50 ≤ 1,000.
 
-Evidence that 16384 is safe at a 32,768 context: vLLM 0.33 (vllm-metal) clamps `max_tokens` to the remaining context. A 20,014-token prompt with `max_tokens 16384` returned HTTP 200, and `max_tokens 32768` on a short prompt also returned 200. The scorer's vLLM version is not published.
+Evidence that 16384 is safe at a 32,768 context: vLLM 0.33 (vllm-metal) clamps `max_tokens` to the remaining context. A 20,014-token prompt with `max_tokens 16384` returned HTTP 200, and `max_tokens 32768` on a short prompt also returned 200. The scorer runs a patched vLLM 0.19.1 (staff); its `get_max_tokens` also clamps (source at tag v0.19.1).
+
+## Amendment 2026-11-17 (b): per-task time 4 min (owner)
+
+Every arm runs with `max_time_minutes: 4` (was 5). The rest of `eval_config` is unchanged: `timeout_seconds 300`, `max_tool_calls 40`, `max_turns 60`. Gate G1's timeout threshold stays at ≤ 3/11.

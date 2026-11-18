@@ -19,7 +19,7 @@ Resume point for the next session. Rules and layout: [AGENTS.md](AGENTS.md) / [C
 | `v6_1_budget` | **Current** = v6 + `max_output_tokens` 8192 | run_11, see below |
 
 Canonical budget (owner rule 2026-11-17, competition defaults; do not ask to change):
-- `eval_config`: `timeout_seconds 300 / max_tool_calls 40 / max_time_minutes 5 / max_turns 60`.
+- `eval_config`: `timeout_seconds 300 / max_tool_calls 40 / max_time_minutes 4 / max_turns 60`.
 - Sampling: max_output 16384 and thinking_budget 4096 for every thinking role; include_thoughts true.
 - Tasks that hit the cap end about 30 s late, so plan the 12 h budget at 5.5 min per task.
 

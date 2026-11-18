@@ -54,4 +54,4 @@ def test_active_submission_uses_competition_budgets(name):
         assert d["max_output_tokens"] == 16384, f"{c.name}: max_output_tokens"
         assert d["thinking_config"]["thinking_budget"] in (0, 4096), f"{c.name}: thinking_budget"
     ev = yaml.safe_load((sub / "eval_config.yaml").read_text())["evaluation"]
-    assert ev["max_time_minutes"] == 5 and ev["timeout_seconds"] == 300
+    assert ev["max_time_minutes"] == 4 and ev["timeout_seconds"] == 300

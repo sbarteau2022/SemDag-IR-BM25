@@ -79,6 +79,9 @@ Status labels: **OFFICIAL** (rules page or staff), **DOCUMENTED** (HARNESS_READM
 
 ## 5b. Additional parity facts (2026-11-17)
 
+- **Scorer vLLM version: patched vLLM 0.19 / 0.19.1** from the wheelhouse (staff Holbrook, 2026-09-28: "We're using a patched version of vLLM 0.19"; 2026-10-15: "the scoring environment uses the exact same patched vLLM 0.19.1 wheelhouse"). vLLM 0.19.1's `get_max_tokens` clamps `max_tokens` to `max_model_len - input_length` and raises only if the prompt alone exceeds 32,768 (`vllm/entrypoints/utils.py` at tag v0.19.1). Local vllm-metal is 0.33.0.
+- **Packages are fixed:** "The scoring environment has a fixed set of packages installed which cannot be modified" (staff, 2026-09-27). The wheelhouse is the authoritative package set.
+
 - **Sampling defaults:** vLLM's default `--generation-config auto` fills any field a request leaves unset from the checkpoint's `generation_config.json`: `temperature 1.0, top_k 64, top_p 0.95`. ADK sends `temperature` and `top_p` from our configs but no `top_k`, so **every scorer call samples with top_k = 64**. Confirmed by the vllm-metal 0.33.0 log line on the same checkpoint (`results/server_bench/vllm_metal/serve_excerpt.log`).
 - **Thinking cut-off:** the scorer's `reasoning_end_str` is the bare `<channel|>`, so at the budget vLLM forces the end marker immediately, with no wrap-up phrase (vLLM reasoning-outputs docs).
 - **vllm-metal** (vLLM 0.33.0 on MLX) runs the scorer's exact flag set on the competition weights, but rejects `thinking_token_budget` (HTTP 400). Gates and throughput: `results/server_bench/vllm_metal/NOTES.md`.
