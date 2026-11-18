@@ -185,7 +185,7 @@ flowchart LR
    # Tests
    .venv-harness/bin/python -m pytest
    ```
-   **Local model server: vllm-metal** (vLLM 0.33 on MLX, owner decision 2026-11-18), launched by `Tools/local/serve_vllm_metal_kaggle.sh` with the scorer's vLLM flags on the competition weights, port 8124, behind the telemetry proxy on 8125. Run the runner with `SERVER=vllm_metal` (its default is still `omlx`). Known gap: vllm-metal rejects `thinking_token_budget` (HTTP 400), so the thinking budget is not enforced locally; use a literal `<|think|>` in the role prompt. Gates and throughput: `results/server_bench/vllm_metal/NOTES.md`. The scorer is patched vLLM 0.19.1 on 4x L4, so local timing still does not predict it.
+   **Local model server: vllm-metal** (vLLM 0.33 on MLX, owner decision 2026-11-18), launched by `Tools/local/serve_vllm_metal_kaggle.sh` with the scorer's vLLM flags on the competition weights, port 8124, behind the telemetry proxy on 8125. It is the runner's default (`SERVER=vllm_metal`) and the only local server; oMLX was removed on 2026-11-18. Known gap: vllm-metal rejects `thinking_token_budget` (HTTP 400), so the telemetry proxy drops it (`--thinking-budget-field drop`) and the thinking budget is not enforced locally. Gates and throughput: `results/server_bench/vllm_metal/NOTES.md`. The scorer is patched vLLM 0.19.1 on 4x L4, so local timing still does not predict it.
 
    Port 8123 is sometimes held by a ClickHouse container on this machine; local runs use 8124 (model) and 8125 (proxy). Telemetry docs: `Tools/telemetry/README.md`.
    *Note*: Local Docker memory is 8 GB; each container takes 4 GiB, so maintain concurrency at 1 or 2.

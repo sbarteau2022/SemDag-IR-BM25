@@ -94,7 +94,7 @@ class Accumulator:
     def _merge_tool_call(self, tc: dict) -> None:
         """Merge one streamed tool-call delta.
 
-        mlx_lm and oMLX send each call whole in one chunk. vLLM (and vllm-metal) send the
+        mlx_lm sends each call whole in one chunk. vLLM (and vllm-metal) send the
         id and name first, then `function.arguments` in fragments that share an `index`.
         Fragments with an index already seen are appended to that call; anything else
         starts a new call.
@@ -175,14 +175,22 @@ def request_fields(body: dict) -> dict:
 
 
 def enforce_thinking_budget(body: dict, field: str | None) -> dict:
-    """Copy the request's thinking budget into the field the local server enforces.
+    """Adapt the request's thinking budget to what the local server accepts.
 
     ADK sends the budget as `thinking_token_budget` (top level, or under `extra_body`), which
-    vLLM's logits processor enforces on the scorer. oMLX 0.7.0 ignores that name and reads
-    `thinking_budget` instead (omlx/server.py `_resolve_thinking_budget`). Only positive
-    budgets are copied; a field the client already set is left alone.
+    vLLM's logits processor enforces on the scorer. vllm-metal rejects it with HTTP 400, so
+    field="drop" removes it (the budget is then NOT enforced locally). Any other field name
+    copies a positive budget into that top-level field, leaving a field the client set alone.
     """
     if not field:
+        return body
+    if field == "drop":
+        # vllm-metal rejects thinking_token_budget with HTTP 400; remove it (budget NOT enforced).
+        body = dict(body)
+        body.pop("thinking_token_budget", None)
+        if isinstance(body.get("extra_body"), dict):
+            body["extra_body"] = {k: v for k, v in body["extra_body"].items()
+                                  if k != "thinking_token_budget"}
         return body
     budget = request_fields(body)["req_thinking_budget"]
     if isinstance(budget, (int, float)) and budget > 0 and field not in body:
@@ -346,7 +354,7 @@ def main():
     ap.add_argument("--run-id", required=True)
     ap.add_argument("--timeout", type=float, default=900.0)
     ap.add_argument("--thinking-budget-field", default=None,
-                    help="copy thinking_token_budget into this request field (oMLX: thinking_budget)")
+                    help="'drop' removes thinking_token_budget (vllm-metal); any other name copies the budget into that field")
     ap.add_argument("--default-top-k", type=int, default=None,
                     help="fill top_k when a request omits it (scorer: 64 from generation_config)")
     a = ap.parse_args()

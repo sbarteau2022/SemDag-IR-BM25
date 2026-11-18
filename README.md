@@ -28,7 +28,7 @@ Measured on the local MLX stand-in, not on the scorer's 4x L4 vLLM:
 
 Why v8 is stuck: stage 1 (four implementers) uses the whole 4-minute budget locally, so the adversary and finalizer never run. In run_22 the lead's ranked sites were wrong for all four assignments, and one implementer repeated a malformed `run_skill_script` call six times. See `docs/runs/run_22_RESULTS.md`.
 
-Local model server: **vllm-metal** (owner decision 2026-11-18), on port 8124 behind the telemetry proxy on 8125. Start runs with `SERVER=vllm_metal Tools/run_eval_seatbelt.sh ...` (the runner's default is still `omlx`). It uses the scorer's vLLM flags but rejects `thinking_token_budget`; use `<|think|>` in prompts. Earlier runs (run_10 to run_19) used mlx_lm or oMLX.
+Local model server: **vllm-metal** (owner decision 2026-11-18), on port 8124 behind the telemetry proxy on 8125. It is the only local server: oMLX was removed on 2026-11-18. `Tools/run_eval_seatbelt.sh` defaults to `SERVER=vllm_metal`; `SANDBOX=subprocess` runs tasks without Docker. vllm-metal uses the scorer's vLLM flags but rejects `thinking_token_budget`, so the proxy drops it and the thinking budget is not enforced locally. Earlier runs (run_10 to run_23) used mlx_lm or oMLX.
 
 Known local defects: the arm64 sandbox image breaks all 67 fastapi tasks (pydantic-core mismatch), so local grading covers rich, requests and httpx only. The scorer is x86_64 and unaffected.
 

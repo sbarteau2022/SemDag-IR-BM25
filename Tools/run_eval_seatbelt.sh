@@ -27,7 +27,7 @@ if [[ "$TASKS" == *local_overlay* ]]; then
   HARNESS_TMP="$HOME/.cache/swegemma_overlay_tmp"; mkdir -p "$HARNESS_TMP"
 fi
 
-export TASKS SERVER="${SERVER:-omlx}"
+export TASKS SERVER="${SERVER:-vllm_metal}"
 # Refuse to start on a submission the official validator rejects (e.g. a stray __pycache__).
 .venv-harness/bin/python -c "import sys; from pathlib import Path; from adk_submission import validate_directory; from swegemma.config import build_submission_limits; validate_directory(Path(sys.argv[1]), limits=build_submission_limits()[0])" "$SUB" \
   || { echo "submission $SUB fails validation; not starting" >&2; exit 2; }
@@ -50,8 +50,8 @@ meta = {
     "run_id": run_id, "arm": arm, "submission_dir": sub, "submission_sha256": h.hexdigest(),
     "git_head": subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip(),
     "git_dirty": bool(subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout.strip()),
-    "sandbox": "docker", "seatbelt": 1, "docker_host": "Docker Desktop",
-    "model": "gemma-4-e4b-it-qat-w4a16-mlx", "server": __import__("os").environ.get("SERVER", "omlx"),
+    "sandbox": __import__("os").environ.get("SANDBOX", "docker"), "seatbelt": 1, "docker_host": "Docker Desktop",
+    "model": "gemma-4-e4b-it-qat-w4a16-mlx", "server": __import__("os").environ.get("SERVER", "vllm_metal"),
     "budget": yaml.safe_load(open(f"{sub}/eval_config.yaml"))["evaluation"],
     "sampling": (yaml.safe_load(open(f"{sub}/configs/sampling.yaml"))
                  if Path(sub, "configs", "sampling.yaml").exists() else
@@ -64,17 +64,17 @@ meta = {
 Path(out, "run_meta.json").write_text(json.dumps(meta, indent=1))
 PY
 
-# SERVER selects the local model server behind the proxy: mlx_lm (verified),
-# omlx (default; oMLX 0.7.0, verified 2026-11-17: see results/server_bench/NOTES.md) or
+# SERVER selects the local model server behind the proxy: vllm_metal (default and the only
+# server in use, owner decision 2026-11-18), mlx_lm (legacy) or
 # rapid (rapid-mlx 1.0.0, NOT yet verified: see results/server_bench/NOTES.md). rapid-mlx is closer to
 # the scorer's vLLM: continuous batching, prefix cache, gemma4 tool/reasoning parsers, and
 # a 32,768-token context cap like max_model_len.
-SERVER="${SERVER:-omlx}"
+SERVER="${SERVER:-vllm_metal}"
 STARTED_SERVER=0
 MODELS_YAML=Tools/local/models_local_8125.yaml
-[[ "$SERVER" == omlx || "$SERVER" == vllm_metal ]] && MODELS_YAML=Tools/local/models_local_omlx_8125.yaml
-# Record who serves port 8124. If a server is already up (for example the oMLX app, which
-# auto-starts on 8124), the runner reuses it: it is then NOT under the seatbelt profile and
+[[ "$SERVER" == vllm_metal ]] && MODELS_YAML=Tools/local/models_local_vllm_metal_8125.yaml
+# Record who serves port 8124. If a server is already up (for example a server left
+# running from an earlier session), the runner reuses it: it is then NOT under the seatbelt profile and
 # its flags are whatever that process was started with. That provenance goes into run.log.
 EXISTING_8124="$( (lsof -nP -iTCP:8124 -sTCP:LISTEN -Fpc 2>/dev/null || true) | tr '\n' ' ')"
 if [[ -n "$EXISTING_8124" ]]; then
@@ -85,14 +85,6 @@ if ! curl -s -m 2 http://127.0.0.1:8124/v1/models >/dev/null; then
   if [[ "$SERVER" == vllm_metal ]]; then
     # vllm-metal 0.33 with the scorer's vLLM flags (its own seatbelt profile allows local IPC).
     Tools/local/serve_vllm_metal_kaggle.sh 8124 >"$OUT/model_server.log" 2>&1 &
-  elif [[ "$SERVER" == omlx ]]; then
-    # oMLX 0.7.0 serves every model folder under --model-dir; ~/models/omlx_e4b holds only a
-    # symlink to the E4B checkpoint. Its cache goes to a temp dir so ~/.omlx state is untouched.
-    mkdir -p "$HOME/models/omlx_e4b" "$OUT/omlx_cache"
-    ln -sfn "$MODEL" "$HOME/models/omlx_e4b/$(basename "$MODEL")"
-    sandbox-exec -f "$SB" /opt/homebrew/bin/omlx serve --model-dir "$HOME/models/omlx_e4b" \
-      --host 127.0.0.1 --port 8124 --max-concurrent-requests 4 \
-      --paged-ssd-cache-dir "$OUT/omlx_cache" --log-level info >"$OUT/model_server.log" 2>&1 &
   elif [[ "$SERVER" == rapid ]]; then
     RAPID_MLX_TELEMETRY=0 sandbox-exec -f "$SB" /opt/homebrew/bin/rapid-mlx --no-telemetry \
       --disable-version-check --no-banner serve "$MODEL" --served-model-name "$MODEL" \
@@ -109,12 +101,12 @@ if ! curl -s -m 2 http://127.0.0.1:8124/v1/models >/dev/null; then
   SERVER_PID=$!; STARTED_SERVER=1
   for i in {1..240}; do curl -s -m 2 http://127.0.0.1:8124/v1/models >/dev/null && break; sleep 2; done
 fi
-# Scorer parity (docs/SCORER_PARITY.md): oMLX reads the thinking budget from `thinking_budget`,
-# not ADK's `thinking_token_budget`, so the proxy copies it across (GAP 2). Compaction and the
+# Scorer parity (docs/SCORER_PARITY.md): vllm-metal rejects ADK's `thinking_token_budget` with
+# HTTP 400, so the proxy drops it (GAP 2: the budget is NOT enforced locally). Compaction and the
 # context cache are switched on by Tools/local/eval_parity.py (GAP 1; SWEGEMMA_PARITY=0 = off).
 # --default-top-k 64: the scorer's vLLM fills unset top_k from generation_config.json (parity P1).
 PROXY_ARGS=(--default-top-k 64)
-[[ $SERVER = omlx ]] && PROXY_ARGS+=(--thinking-budget-field thinking_budget)
+[[ $SERVER = vllm_metal ]] && PROXY_ARGS+=(--thinking-budget-field drop)
 sandbox-exec -f "$SB" "$ROOT/.venv-harness/bin/python" Tools/telemetry/llm_proxy.py \
   --listen 8125 --upstream 127.0.0.1:8124 --db "$DB" --run-id "$RUN_ID" \
   "${PROXY_ARGS[@]}" >"$OUT/llm_proxy.log" 2>&1 &
@@ -131,8 +123,7 @@ if [[ $SANDBOX = docker ]] && ! docker info >/dev/null 2>&1; then
   kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true
   exit 4
 fi
-# The oMLX paged SSD cache grows to ~18 GB per 5-task run; it is scratch, so remove it.
-cleanup() { kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true; rm -rf "$OUT/omlx_cache"; [[ $SERVER = vllm_metal && $STARTED_SERVER = 1 ]] && pkill -f "vllm serve" || true; }
+cleanup() { kill $PROXY_PID 2>/dev/null || true; [[ $STARTED_SERVER = 1 ]] && kill $SERVER_PID 2>/dev/null || true; [[ $SERVER = vllm_metal && $STARTED_SERVER = 1 ]] && pkill -f "vllm serve" || true; }
 trap cleanup EXIT
 
 echo "run $RUN_ID: budget timeout=$TS calls=$CALLS minutes=$MINS turns=$TURNS" | tee "$OUT/run.log"

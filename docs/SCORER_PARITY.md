@@ -60,17 +60,17 @@ Status labels: **OFFICIAL** (rules page or staff), **DOCUMENTED** (HARNESS_READM
 
 ## 5. Local parity: where our runs match and where they do not
 
-| Item | Scorer | Local (`Tools/run_eval_seatbelt.sh`, oMLX) | Parity |
+| Item | Scorer | Local (`Tools/run_eval_seatbelt.sh`, vllm-metal; oMLX removed 2026-11-18) | Parity |
 |---|---|---|---|
 | Model weights | `gemma-4-e4b-it-qat-w4a16-ct` | Lossless MLX repack of the same checkpoint | match |
-| Parsers / tool format | vLLM gemma4 parsers | oMLX gemma4 parsing, proxy equivalence 2/2 | match (smoke-tested) |
+| Parsers / tool format | vLLM gemma4 parsers | vllm-metal gemma4 parsers (same vLLM front end), proxy equivalence 2/2 | match (smoke-tested) |
 | Network | none | seatbelt profile (loopback only) + Docker `network_mode=none` | match |
 | Container limits | 4 GiB / 2 vCPU | same harness Docker backend | match |
 | Budgets | eval_config.yaml | runner passes eval_config values as CLI flags | match |
 | Verification timeout | 300 s | CLI default 300 s | match |
 | Retries | ModelRetryPlugin | same `agent_runner.py` | match |
 | **Compaction** | 14,336-token compaction + context cache | **Now on via `Tools/local/eval_parity.py`** (unit-tested; live check pending, Docker Desktop quit mid-run 2026-11-17). Before: off. `swegemma eval` has no flag for it and `EvalConfig` defaults are `None` ([SRC] `config.py:117-118`, `agent_runner.py:692-695`) | **GAP 1** |
-| **Thinking budget** | Enforced by the vLLM logits processor | **Now enforced** by the proxy `--thinking-budget-field thinking_budget` (LIVE-MEASURED 2026-11-17: budget 64 → 61 reasoning tokens, 1024 → 1021, no budget → 1557; `results/server_bench/thinking_budget_gate/`). Before: not enforced. ADK sends `extra_body.thinking_token_budget`. oMLX 0.7.0 reads a different field, top-level `thinking_budget` (`omlx/server.py:1887-1900`, `api/openai_models.py:368`), so the budget is dropped | **GAP 2 (closable)** |
+| **Thinking budget** | Enforced by the vLLM logits processor | **Not enforced.** vllm-metal rejects `thinking_token_budget` with HTTP 400, so the proxy drops it (`--thinking-budget-field drop`). Thinking length is unbounded locally (up to `max_output_tokens`). The 2026-11-17 oMLX budget gate (`results/server_bench/thinking_budget_gate/`) no longer applies: oMLX was removed 2026-11-18 | **GAP 2 (open)** |
 | **Penalties** | Over the whole output | mlx_lm 20-token window (`sample_utils.py:76-82`) | **GAP 3** |
 | **Speed** | 4×L4 TP=4, E4B; **not measured by us** | 57.5 tok/s decode, 0.4–0.6 s TTFT (run_15, run_16) | **GAP 4, unknown size** |
 | **Dependencies** | Private Docker sandbox, its own dependency set | Harness picks the newest wheel per package (`container_setup.py::_deduplicate_wheels`); fastapi breaks (run_18) | **GAP 5** (irrelevant for fastapi, which is not scored) |
@@ -90,7 +90,7 @@ Status labels: **OFFICIAL** (rules page or staff), **DOCUMENTED** (HARNESS_READM
 ## 6. Matching plan (proposed, not built)
 
 1. **GAP 1 compaction:** a small runner in `Tools/` that builds `EvalConfig` with the documented `EventsCompactionConfig` and `ContextCacheConfig` and calls the harness evaluator, used in place of the bare CLI. Test: compaction events appear in the traces of a long task.
-2. **GAP 2 thinking budget:** the proxy copies `thinking_token_budget` into oMLX's `thinking_budget`. Gate: a live call with budget 64 stops thinking near 64 tokens, and `v_thinking_budget` shows no overruns. Whether oMLX's cut-off behaves like vLLM's logits processor still needs a Kaggle check.
+2. **GAP 2 thinking budget:** vllm-metal cannot enforce it. Option: the proxy streams, counts reasoning tokens, and at the budget stops and resumes with `<channel|>` forced (vLLM's processor behaviour). Gate: a live call with budget 64 stops thinking near 64 tokens, and `v_thinking_budget` shows no overruns.
 3. **GAP 3 penalties:** do not rely on penalties to stop loops. Cap planner `max_output_tokens`.
 4. **GAP 4 speed:** one gated Kaggle L4 timing run (no submission) to measure E4B tok/s and TTFT under TP=4. Until then, local times are an upper bound on per-task wall time.
 5. **GAP 5/6 repos:** stop adding per-repo lanes for fastapi. Use the fresh, unseen-repo dev set (owner decision 2026-11-17) as the generalization check.

@@ -429,3 +429,13 @@ def test_accumulator_keeps_reasoning_content_field_name():
     acc.feed({"choices": [{"delta": {"content": "ok"}, "finish_reason": "stop"}]}, 0.2)
     msg = acc.response()["choices"][0]["message"]
     assert msg["reasoning_content"] == "think" and "reasoning" not in msg
+
+
+def test_thinking_budget_drop_removes_field_for_vllm_metal():
+    import llm_proxy
+    body = {"model": "m", "thinking_token_budget": 4096,
+            "extra_body": {"thinking_token_budget": 4096, "keep": 1}}
+    out = llm_proxy.enforce_thinking_budget(body, "drop")
+    assert "thinking_token_budget" not in out
+    assert out["extra_body"] == {"keep": 1}
+    assert body["thinking_token_budget"] == 4096  # caller's dict untouched
