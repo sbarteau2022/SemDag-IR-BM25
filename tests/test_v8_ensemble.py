@@ -119,3 +119,16 @@ def test_gate_ranks_correct_candidate_first_and_adopt_applies_it(repo):
     diff = subprocess.run(["git", "diff", "_swegemma_baseline", "--stat"], cwd=repo,
                           capture_output=True, text=True).stdout
     assert ".git/wt_" not in diff and "pkg/calc.py" in diff
+
+
+def test_every_v8_yaml_parses_like_the_harness_loader():
+    """The validator does not parse sub-agent YAML; a bad scalar only fails at run time."""
+    import yaml
+
+    class L(yaml.SafeLoader):
+        pass
+    L.add_constructor("!include", lambda loader, node: loader.construct_scalar(node))
+    sub = SCRIPTS.parents[2]
+    for f in sorted(sub.rglob("*.yaml")):
+        data = yaml.load(f.read_text(), Loader=L)
+        assert isinstance(data, dict), f

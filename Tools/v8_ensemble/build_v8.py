@@ -8,6 +8,7 @@ review over every candidate) and a final implementer (6k: adopt, fix, last test 
 vLLM counts thinking inside max_tokens, so thinking is 3072 under a 4096 cap and 4096 under 6144.
 The generated directory is overwritten on every build; edit the sources here, not the output.
 """
+import json
 import shutil
 from pathlib import Path
 
@@ -95,7 +96,7 @@ def write(rel, text):
 
 
 def agent_yaml(name, desc, prompt, sampling, tools, output_key, include_none=False):
-    lines = [f"name: {name}", f"description: {desc}", f"model: {MODEL}",
+    lines = [f"name: {name}", f"description: {json.dumps(desc)}", f"model: {MODEL}",
              f"instruction: !include ../prompts/{prompt}"]
     if include_none:
         lines.append("include_contents: none")
@@ -126,11 +127,11 @@ def build():
     write("prompts/coordinator.md", COORDINATOR + "\n")
     write("prompts/finalizer.md", FINALIZER + "\n")
     write("sub_agents/implementers.yaml",
-          "name: implementers\ndescription: Four implementers in parallel, each in its own copy.\n"
+          "name: implementers\ndescription: \"Four implementers in parallel, each in its own copy.\"\n"
           "agent_class: ParallelAgent\nsub_agents:\n"
           + "".join(f"  - config_path: implementer_{k}.yaml\n" for k in range(1, K + 1)))
     write("sub_agents/adversaries.yaml",
-          "name: adversaries\ndescription: Four adversarial reviewers in parallel, one per candidate.\n"
+          "name: adversaries\ndescription: \"Four adversarial reviewers in parallel, one per candidate.\"\n"
           "agent_class: ParallelAgent\nsub_agents:\n"
           + "".join(f"  - config_path: adversary_{k}.yaml\n" for k in range(1, K + 1)))
     write("sub_agents/coordinator.yaml", agent_yaml(
