@@ -2,9 +2,11 @@
 
     .venv-harness/bin/python Tools/v8_ensemble/build_v8.py
 
-Owner design (2026-11-17): army script + 4 implementers (4k hard output cap each, parallel),
-4 adversarial reviewers (4k each, parallel), a coordinator (6k: pytest, static typecheck, code
-review over every candidate) and a final implementer (6k: adopt, fix, last test run, submit).
+Owner design (2026-11-17/18): ONE lead agent goes first (6k: plan.py = testing script + code
+review material + the four copies; it writes one assignment per implementer). Only then the 4
+implementers (4k each, parallel), then 4 adversarial reviewers (4k each, parallel), then the final
+implementer (6k: gate.py = pytest + static typecheck + code review + counterexamples, adopt, fix,
+last test run, one submit).
 Thinking (owner, 2026-11-18): every thinking role has thinking_budget 0, so the harness sends no
 thinking_token_budget (vllm-metal rejects it), and a literal <|think|> as the first line of the role
 instruction turns Gemma 4 thinking on. The hard output cap (4096 / 6144) is the only bound.
@@ -31,7 +33,7 @@ All calls go through `run_skill_script` with `skill_name: semdag`. Every script 
 
 | file_path | args | Use |
 |---|---|---|
-| `scripts/fork.py` | `["<k>", "<problem statement>"]` | Implementer k: own copy at `.git/wt_<k>`, start site with exact source, `run_prefix`, `test_cmd`, `audit_args` |
+| `scripts/plan.py` | `["<problem statement>"]` | Lead: baseline tests, ranked sites with exact source, creates copies `.git/wt_1..4` |
 | `scripts/edit.py` | `["<k>", "<file>", "<old>", "<new>"]` | Implementer k's only edit tool: always writes into `.git/wt_<k>` (rescue refs `@1`, `L120-126` as fix_edit) |
 | `scripts/audit.py` | `["--wt", "<k>", "--repro", cmd]` or `["--repro", cmd]` | Sign-off for copy k, or for the main workspace. `decision`: submit / submit_best / revise |
 | `scripts/review_pack.py` | `["<k>"]` | Reviewer: candidate k's diff, files and self-audit |
@@ -45,16 +47,20 @@ Repro files belong in `/tmp`, created with `run_command` (heredoc). `write_file`
 
 THINK = "<|think|>\n"
 
-IMPLEMENTER = THINK + """You are implementer {k} of 4. All four fix the same issue independently, each in its own copy of the repository; the best copy wins. You have at most 10 tool calls.
+IMPLEMENTER = THINK + """You are implementer {k} of 4. The lead has reviewed the code and assigned the work:
 
-1. Call run_skill_script(skill_name="semdag", file_path="scripts/fork.py", args=["{k}", "<the whole problem statement>"]). It creates your copy `.git/wt_{k}` and gives your start site with its exact source, `run_prefix`, `test_cmd` and `audit_args`.
-2. Reproduce: create `/tmp/repro_{k}.py` with run_command (heredoc), importing the package and asserting the CORRECT behaviour from the issue. Run it with `run_prefix` (e.g. `<run_prefix>python /tmp/repro_{k}.py`). It must fail now.
-3. Fix: read the exact lines of your copy with read_file(".git/wt_{k}/<file>"), then change them ONLY with run_skill_script(skill_name="semdag", file_path="scripts/edit.py", args=["{k}", "<file path as in the repo>", "<exact old text>", "<new text>"]). It always writes into your copy. If it answers with a block reference such as "@1", call it again with "@1" as the old text. Make the smallest change at the root cause. Never edit test files.
-4. Run the repro again with `run_prefix`. It must pass.
-5. Call run_skill_script(skill_name="semdag", file_path="scripts/audit.py", args=<audit_args from fork>). If the decision is `revise` and you have calls left, fix once more and audit again.
+{{assignments?}}
+
+Do the line that starts with ASSIGN {k}. Your own copy of the repository already exists at `.git/wt_{k}`. You have at most 10 tool calls.
+
+1. Read the code you were assigned in your copy: read_file(".git/wt_{k}/<file>").
+2. Reproduce: create `/tmp/repro_{k}.py` with run_command (heredoc) that imports the package and asserts the CORRECT behaviour from the issue. Run it with: cd /workspace/.git/wt_{k} && PYTHONPATH=src:. python /tmp/repro_{k}.py  (it must fail now).
+3. Fix: run_skill_script with skill_name semdag, file_path scripts/edit.py, args ["{k}", "<file path as in the repo>", "<exact old text>", "<new text>"]. It always writes into your copy. If it answers with a block reference such as "@1", call it again with "@1" as the old text. Smallest change at the root cause. Never edit test files.
+4. Run the repro again (same command). It must pass.
+5. Audit: run_skill_script with skill_name semdag, file_path scripts/audit.py, args ["--wt", "{k}", "--repro", "cd /workspace/.git/wt_{k} && PYTHONPATH=src:. python /tmp/repro_{k}.py"]. If the decision is revise and you have calls left, fix once more and audit again.
 6. End with exactly one line: CANDIDATE {k} <audit decision> <one-sentence summary of the change>.
 
-Rules: change code only with edit.py; never run the full test suite (use `test_cmd`); create files only under /tmp and only with run_command."""
+Write argument values plainly: no extra quotes inside them. Change code only with edit.py. Never run the full test suite."""
 
 ADVERSARY = THINK + """You are adversarial reviewer {k}. Your target is candidate {k}, a fix for the issue written by implementer {k}. You have at most 3 tool calls and you never edit files.
 
@@ -64,31 +70,36 @@ ADVERSARY = THINK + """You are adversarial reviewer {k}. Your target is candidat
 4. Write ONE counterexample: a short standalone Python script that imports the package and asserts the CORRECT behaviour from the issue on that input. Save it with run_skill_script(skill_name="semdag", file_path="scripts/save_cex.py", args=["{k}", "<the code>"]). If it reports a syntax error, fix it and save once more.
 5. End with exactly one line: CEX {k} <what the counterexample checks>, or NONE {k} <why no counterexample exists>."""
 
-COORDINATOR = THINK + """You are the coordinator. Four implementers wrote candidate fixes in `.git/wt_1` .. `.git/wt_4`, and four adversarial reviewers saved counterexamples. You make one tool call and never edit files.
+LEAD = THINK + """You are the lead. You go first; nobody else starts until you have assigned the work. You make one tool call and never edit files.
 
-1. Call run_skill_script(skill_name="semdag", file_path="scripts/gate.py", args=[]). It runs pytest, the static typecheck and the code review on every candidate, runs every counterexample against every candidate, and ranks them.
-2. Answer with:
-   - first line: WINNER <k> (the gate's winner, unless its data clearly shows another candidate is better), or WINNER none if every candidate is empty;
-   - then at most 5 short lines: the winner's open problems (static errors, review issues, failing tests, failing counterexamples) and which other candidate, if any, handled them, so the final implementer can fix them."""
+1. Call run_skill_script with skill_name semdag, file_path scripts/plan.py, args ["<the whole problem statement>"]. It runs the nearest tests once, ranks the likely edit sites with their exact source, and creates four copies of the repository for the implementers.
+2. Review: from the issue, the failing tests and the code shown, decide where the bug most likely is and what the fix should be.
+3. Answer with exactly four lines, one per implementer, each a DIFFERENT hypothesis (a different site, or a different fix at the same site), the most likely first:
+ASSIGN 1: <file> <function> - <what to change and why>
+ASSIGN 2: ...
+ASSIGN 3: ...
+ASSIGN 4: ...
+Then one line: TESTS <the test command from plan, or none>."""
 
-FINALIZER = THINK + """You are the final implementer. The coordinator's verdict:
+FINALIZER = THINK + """You are the final implementer. The lead's assignments were:
 
-{gate_verdict?}
+{assignments?}
 
-You work in the main workspace (paths WITHOUT `.git/wt_`). You have at most 12 tool calls.
+Four implementers wrote candidates in `.git/wt_1` .. `.git/wt_4` and four adversarial reviewers saved counterexamples. You work in the main workspace (paths WITHOUT `.git/wt_`). You have at most 12 tool calls.
 
-1. If the verdict says WINNER none, call run_skill_script(skill_name="semdag", file_path="scripts/audit.py", args=[]) and end with: NO PATCH.
-2. Call run_skill_script(skill_name="semdag", file_path="scripts/adopt.py", args=["<winner k>"]). It applies the winning candidate to the main workspace and audits it with the candidate's repro. If it cannot apply, adopt the next candidate from the ranking.
-3. If the decision is `submit` or `submit_best`, call submit_patch, then end with: SUBMITTED <k>.
-4. If the decision is `revise`, fix the listed problems directly in the main workspace: read_file the exact lines, then a small edit_file. Then run audit.py with args ["--repro", "<the repro command from adopt, run from /workspace>"] as the last test run. If the decision is now `submit` or `submit_best`, call submit_patch.
-5. Call submit_patch at most once. Never edit test files. End with one line: SUBMITTED <k> or NO PATCH <reason>."""
+1. Call run_skill_script with skill_name semdag, file_path scripts/gate.py, args []. It runs pytest, the static typecheck and the code review on every candidate, runs every counterexample against every candidate, and ranks them.
+2. If no candidate changed anything, end with: NO PATCH.
+3. Call run_skill_script with skill_name semdag, file_path scripts/adopt.py, args ["<winner k>"]. It applies the winner to the main workspace and audits it. If it cannot apply, adopt the next candidate in the ranking.
+4. If the decision is submit or submit_best, call submit_patch, then end with: SUBMITTED <k>.
+5. If the decision is revise, fix the listed problems in the main workspace: read_file the exact lines, then a small edit_file. Last test run: run audit.py with args ["--repro", "<the repro command from adopt>"]. If the decision is now submit or submit_best, call submit_patch.
+6. Call submit_patch at most once. Never edit test files. End with one line: SUBMITTED <k> or NO PATCH <reason>."""
 
 SAMPLING = {
     "sampling_implement.yaml": ("Implementers: diverse (temperature 1.0), 4k hard output cap; thinking via <|think|>, no thinking_token_budget.",
                                 "temperature: 1.0\ntop_p: 0.95\npresence_penalty: 0.3\nfrequency_penalty: 0.2\nmax_output_tokens: 4096\nthinking_config:\n  thinking_budget: 0\n  include_thoughts: true\n"),
     "sampling_adversary.yaml": ("Adversarial reviewers: 4k hard output cap; thinking via <|think|>.",
                                 "temperature: 0.2\ntop_p: 0.95\nmax_output_tokens: 4096\nthinking_config:\n  thinking_budget: 0\n  include_thoughts: true\n"),
-    "sampling_coordinator.yaml": ("Coordinator: 6k hard output cap; thinking via <|think|>.",
+    "sampling_lead.yaml": ("Lead: 6k hard output cap; thinking via <|think|>.",
                                   "temperature: 0.0\ntop_p: 1.0\nmax_output_tokens: 6144\nthinking_config:\n  thinking_budget: 0\n  include_thoughts: true\n"),
     "sampling_final.yaml": ("Final implementer: 6k hard output cap; thinking via <|think|>.",
                             "temperature: 0.0\ntop_p: 1.0\nmax_output_tokens: 6144\nthinking_config:\n  thinking_budget: 0\n  include_thoughts: true\n"),
@@ -130,7 +141,7 @@ def build():
         write(f"sub_agents/adversary_{k}.yaml", agent_yaml(
             f"adversary_{k}", f"Adversarial reviewer {k}: writes a counterexample for candidate {k}.",
             f"adversary_{k}.md", "sampling_adversary.yaml", ["read_file"], f"cex_{k}"))
-    write("prompts/coordinator.md", COORDINATOR + "\n")
+    write("prompts/lead.md", LEAD + "\n")
     write("prompts/finalizer.md", FINALIZER + "\n")
     write("sub_agents/implementers.yaml",
           "name: implementers\ndescription: \"Four implementers in parallel, each in its own copy.\"\n"
@@ -140,10 +151,9 @@ def build():
           "name: adversaries\ndescription: \"Four adversarial reviewers in parallel, one per candidate.\"\n"
           "agent_class: ParallelAgent\nsub_agents:\n"
           + "".join(f"  - config_path: adversary_{k}.yaml\n" for k in range(1, K + 1)))
-    write("sub_agents/coordinator.yaml", agent_yaml(
-        "coordinator", "Runs the gate (pytest, static typecheck, code review, counterexamples) and names the winner.",
-        "coordinator.md", "sampling_coordinator.yaml", ["get_status"], "gate_verdict",
-        include_none=True))
+    write("sub_agents/lead.yaml", agent_yaml(
+        "lead", "Goes first: testing script and code review (plan.py), then one assignment per implementer.",
+        "lead.md", "sampling_lead.yaml", ["get_status"], "assignments"))
     write("sub_agents/finalizer.yaml", agent_yaml(
         "finalizer", "Adopts the winner into /workspace, fixes open problems, last test run, submits once.",
         "finalizer.md", "sampling_final.yaml",
@@ -153,11 +163,11 @@ def build():
         write(f"configs/{name}", f"# {comment}\n{body}")
     write("agent.yaml",
           "agent_class: SequentialAgent\nname: v8_ensemble\n"
-          "description: >\n  Army fork + 4 parallel implementers -> 4 parallel adversarial reviewers ->\n"
-          "  coordinator gate (pytest, static typecheck, code review) -> final implementer.\n"
-          "sub_agents:\n  - config_path: sub_agents/implementers.yaml\n"
-          "  - config_path: sub_agents/adversaries.yaml\n"
-          "  - config_path: sub_agents/coordinator.yaml\n  - config_path: sub_agents/finalizer.yaml\n")
+          "description: >\n  Lead first (testing script + code review, assigns work) -> 4 parallel implementers ->\n"
+          "  4 parallel adversarial reviewers -> final implementer (gate, adopt, last test, submit).\n"
+          "sub_agents:\n  - config_path: sub_agents/lead.yaml\n"
+          "  - config_path: sub_agents/implementers.yaml\n"
+          "  - config_path: sub_agents/adversaries.yaml\n  - config_path: sub_agents/finalizer.yaml\n")
     write("eval_config.yaml",
           "# Owner rules 2026-11-17: 4 min per task; command timeout and tool calls/turns at the\n"
           "# competition defaults (the ensemble needs ~50 tool calls).\n"

@@ -4,6 +4,7 @@ Each solver k works in its own git worktree at <workspace>/.git/wt_<k>, checked 
 harness baseline. Git never tracks anything under .git/, so a worktree can never enter the
 submitted patch; edit_file and read_file accept the paths because they stay inside /workspace.
 """
+import ast
 import json
 import os
 import re
@@ -18,6 +19,45 @@ import impact  # noqa: E402
 
 MAIN_CID = "task"
 K_MAX = 4
+
+
+_TOKEN = re.compile(r"[\w./@:+-]+")
+
+
+def _unquote(s):
+    """Strip literal quotes only around a single token (a number, path, flag or name), never
+    around code: old/new text for edits must reach fix_edit byte for byte."""
+    t = s.strip()
+    while len(t) >= 2 and t[0] == t[-1] and t[0] in "\"'" and _TOKEN.fullmatch(t[1:-1].strip()):
+        t = t[1:-1].strip()
+    return t if t != s.strip() else s
+
+
+def normalize(argv, unquote_upto=None):
+    """Undo the argument shapes a small model emits through run_skill_script (run_21): nested
+    lists, a stringified list, and values wrapped in literal quotes ('"3"', '"semdag"')."""
+    out = []
+
+    def add(x):
+        if isinstance(x, (list, tuple)):
+            for y in x:
+                add(y)
+            return
+        s = str(x)
+        st = s.strip()
+        if st.startswith("[") and st.endswith("]"):
+            try:
+                v = ast.literal_eval(st)
+                if isinstance(v, (list, tuple)):
+                    add(list(v))
+                    return
+            except (ValueError, SyntaxError):
+                pass
+        out.append(s)
+
+    add(list(argv))
+    return [s if (unquote_upto is not None and i >= unquote_upto) else _unquote(s)
+            for i, s in enumerate(out)]
 
 
 def dumps(obj):

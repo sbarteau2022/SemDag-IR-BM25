@@ -50,7 +50,8 @@ def _dumps(obj):
 
 
 def parse(argv):
-    args = repo_eval._as_list([str(a) for a in argv])
+    import ensemble  # local import: undo nested / quoted args (run_21)
+    args = ensemble.normalize(argv)
     wt = None
     for flag in ("--wt", "--dir"):
         if flag in args:

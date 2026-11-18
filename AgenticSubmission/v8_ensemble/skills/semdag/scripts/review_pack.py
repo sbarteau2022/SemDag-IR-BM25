@@ -38,7 +38,7 @@ def pack(argv):
 
 def main(argv=None):
     try:
-        out = pack(sys.argv[1:] if argv is None else argv)
+        out = pack(E.normalize(sys.argv[1:] if argv is None else argv))
     except Exception as ex:  # never hand the model a traceback
         out = {"error": f"{type(ex).__name__}: {ex}"[:300]}
     print(E.dumps(out))

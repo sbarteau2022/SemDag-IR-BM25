@@ -70,7 +70,7 @@ def fork(argv):
 
 def main(argv=None):
     try:
-        out = fork(sys.argv[1:] if argv is None else argv)
+        out = fork(E.normalize(sys.argv[1:] if argv is None else argv))
         while len(E.dumps(out)) > BUDGET and out.get("start_site", {}).get("source"):
             src = out["start_site"]["source"]
             out["start_site"]["source"] = src[: len(src) * 3 // 4]

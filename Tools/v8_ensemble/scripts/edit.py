@@ -38,7 +38,7 @@ def edit(argv):
 
 def main(argv=None):
     try:
-        out = edit(sys.argv[1:] if argv is None else argv)
+        out = edit(E.normalize(sys.argv[1:] if argv is None else argv, unquote_upto=2))
     except Exception as ex:  # never hand the model a traceback
         out = {"ok": False, "error": f"{type(ex).__name__}: {ex}"[:300]}
     print(E.dumps(out))

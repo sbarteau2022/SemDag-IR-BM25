@@ -7,7 +7,7 @@ All calls go through `run_skill_script` with `skill_name: semdag`. Every script 
 
 | file_path | args | Use |
 |---|---|---|
-| `scripts/fork.py` | `["<k>", "<problem statement>"]` | Implementer k: own copy at `.git/wt_<k>`, start site with exact source, `run_prefix`, `test_cmd`, `audit_args` |
+| `scripts/plan.py` | `["<problem statement>"]` | Lead: baseline tests, ranked sites with exact source, creates copies `.git/wt_1..4` |
 | `scripts/edit.py` | `["<k>", "<file>", "<old>", "<new>"]` | Implementer k's only edit tool: always writes into `.git/wt_<k>` (rescue refs `@1`, `L120-126` as fix_edit) |
 | `scripts/audit.py` | `["--wt", "<k>", "--repro", cmd]` or `["--repro", cmd]` | Sign-off for copy k, or for the main workspace. `decision`: submit / submit_best / revise |
 | `scripts/review_pack.py` | `["<k>"]` | Reviewer: candidate k's diff, files and self-audit |

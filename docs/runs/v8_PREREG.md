@@ -56,3 +56,10 @@ The rich lane, 5 tasks, all flat layout: rich_3468, rich_3180, rich_3296, rich_3
 - **Server:** vllm-metal 0.33 with the scorer's vLLM flags (`SERVER=vllm_metal`), which became usable once no budget field is sent.
 - **Isolation fix:** implementers lose `edit_file` and change code only through `scripts/edit.py`, which always writes into `.git/wt_<k>`. This fixes run_20's 37 stray edits.
 - **run_21:** one task end to end (rich_3468), subprocess sandbox, owner request.
+
+## Amendment 2026-11-18 (b): lead goes first (owner), before run_22
+
+- **Order:** **lead (6k)** first, alone. It runs `plan.py` (baseline tests, ranked sites with exact source, creates `.git/wt_1..4`), reviews the code, and writes `ASSIGN 1..4` lines with a different hypothesis per implementer. Then **4 implementers (4k)**, which start already assigned, with their copies already made and no fork call. Then **4 adversaries (4k)**. Then the **final implementer (6k)**: gate.py (pytest, static typecheck, code review, counterexamples), adopt, fix, last test run, one submit. The separate coordinator is folded into the lead and the final implementer.
+- **Sloppy arguments:** all v8 scripts accept nested lists, stringified lists and quoted tokens (run_21). Code text passed to edit.py and save_cex.py is never unquoted.
+- **Server:** back to oMLX, which was faster than vllm-metal on real prompts in run_21. P2 check (`<|think|>` on oMLX) passed: reasoning parsed (210 chars) and the tool call was correct.
+- **run_22:** one task end to end, rich_3468.

@@ -143,3 +143,22 @@ def test_edit_writes_only_into_the_implementers_copy(repo):
     assert (repo / "pkg" / "calc.py").read_text() == BUGGY       # main workspace untouched
     assert not run("edit.py", repo, "2", "tests/test_calc.py", "assert", "pass").get("ok")
     assert "fork.py first" in run("edit.py", repo, "4", "pkg/calc.py", "a", "b")["error"]
+
+
+def test_plan_creates_all_copies_before_anyone_starts(repo):
+    out = run("plan.py", repo, ISSUE)
+    assert "error" not in out, out
+    assert out["copies"] == [f".git/wt_{k}" for k in range(1, 5)]
+    assert all((repo / ".git" / f"wt_{k}" / "pkg" / "calc.py").exists() for k in range(1, 5))
+    assert out["sites"][0]["file"] == "pkg/calc.py" and "return a - b" in out["sites"][0]["source"]
+    assert out["baseline_tests"]["red_reason"] == "assertion"
+    assert "ASSIGN" in out["next"]
+
+
+def test_sloppy_arguments_are_accepted(repo):
+    run("plan.py", repo, ISSUE)
+    # nested list with quoted values, as gemma emitted in run_21
+    out = run("edit.py", repo, "[\'\"1\"\', \'pkg/calc.py\', \'return a - b\', \'return a + b\']")
+    assert out.get("ok"), out
+    aud = run("audit.py", repo, '"--wt"', '"1"')
+    assert aud["wt"] == 1, aud

@@ -65,7 +65,7 @@ def test_v8_ensemble_caps():
     if not sub.exists():
         pytest.skip("not built")
     caps = {"sampling_implement.yaml": 4096, "sampling_adversary.yaml": 4096,
-            "sampling_coordinator.yaml": 6144, "sampling_final.yaml": 6144}
+            "sampling_lead.yaml": 6144, "sampling_final.yaml": 6144}
     for name, cap in caps.items():
         d = yaml.safe_load((sub / "configs" / name).read_text())
         assert d["max_output_tokens"] == cap, name
@@ -74,5 +74,5 @@ def test_v8_ensemble_caps():
     assert (ev["max_time_minutes"], ev["timeout_seconds"], ev["max_tool_calls"], ev["max_turns"]) \
         == (4, 300, 100, 500)
 
-    for prompt in ("implementer_1.md", "adversary_1.md", "coordinator.md", "finalizer.md"):
+    for prompt in ("implementer_1.md", "adversary_1.md", "lead.md", "finalizer.md"):
         assert (sub / "prompts" / prompt).read_text().startswith("<|think|>"), prompt

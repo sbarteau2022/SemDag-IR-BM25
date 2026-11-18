@@ -51,7 +51,7 @@ def save(argv):
 
 def main(argv=None):
     try:
-        out = save(sys.argv[1:] if argv is None else argv)
+        out = save(E.normalize(sys.argv[1:] if argv is None else argv, unquote_upto=1))
     except Exception as ex:  # never hand the model a traceback
         out = {"error": f"{type(ex).__name__}: {ex}"[:300]}
     print(E.dumps(out))
