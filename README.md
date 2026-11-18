@@ -25,6 +25,7 @@ Measured on the local MLX stand-in, not on the scorer's 4x L4 vLLM:
 | `v6_1_budget` | v6 + `max_output_tokens` 8192 | 1/25 on unseen tasks, 15 fastapi tasks ungradable locally |
 | `v7_brigade_lite` | lane runs | tied v6 (2/11 vs 2/11) |
 | `v8_ensemble` | lead plan, 4 implementers, 1 adversary, finalizer | 0/5 (run_20); timeout on 1 task in run_21 and run_22 |
+| `v9_recurrent` | hybrid recurrent SemDAG candidate | 0/2 vllm-metal smoke (run_24); both timed out |
 
 Why v8 is stuck: stage 1 (four implementers) uses the whole 4-minute budget locally, so the adversary and finalizer never run. In run_22 the lead's ranked sites were wrong for all four assignments, and one implementer repeated a malformed `run_skill_script` call six times. See `docs/runs/run_22_RESULTS.md`.
 
@@ -50,7 +51,7 @@ Known local defects: the arm64 sandbox image breaks all 67 fastapi tasks (pydant
 
 - Approve the floor submission and the first daily submit.
 - fastapi local-grading fix choice.
-- Add a private GitHub remote? This folder is a git repo with no remote; GitHub only has the Nov 12 `SemDag-IR-BM25` commits.
+- Decide whether the interview-review branch should become the repository's default branch.
 
 ## Map
 
@@ -65,7 +66,7 @@ Known local defects: the arm64 sandbox image breaks all 67 fastapi tasks (pydant
 | `Tools/` | local runner, MLX server scripts, telemetry, v8 builder |
 | `Designs/` | audits, roadmap, dataset and LoRA designs |
 | `competition-constraints/`, `Rules/`, `DataSets/` | official rules and data (DataSets is gitignored) |
-| `SemDag-IR-BM25/` | local clone of the public GitHub repo (1 commit ahead, unpushed) |
+| `SemDag-IR-BM25/` | ignored local clone of the public GitHub repo |
 
 ## Session start protocol
 

@@ -20,6 +20,8 @@ Durable facts for future sessions. One line per fact, newest last in each sectio
 - No Kaggle submission yet. Kaggle L4 timing notebook never run.
 - This folder is a git repo with no remote. GitHub `sbarteau2022/SemDag-IR-BM25` has only the Nov 12 paper and v4 commits, plus open PR #1 (swe_traj_v1 dataset). `MetaSuperIntelligenceLabs-GlobalHack-A-thon-SoloDevTrack` is an unrelated project.
 - Local environment: port 8123 is sometimes taken by a ClickHouse container; use 8124 (model) and 8125 (proxy). fastapi tasks cannot be graded locally (arm64 pydantic-core mismatch).
+- v9_recurrent run_24 vllm-metal smoke resolved 0/2; both tasks timed out at about 244-245 seconds. Full host suite: 147 passed, 3 warnings. (2026-11-18)
+- The project is published to `sbarteau2022/SemDag-IR-BM25`; local `main` tracks the remote interview-review branch until the owner changes the default branch. (2026-11-18)
 
 ## Data and training
 - `LoRAData/final` (6,874 rows) is demoted: 72% derived from public eval tasks. Replacement design: `Designs/FAILURE_DRIVEN_DATASET.md`.
