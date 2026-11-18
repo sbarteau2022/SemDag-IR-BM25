@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ensemble as E  # noqa: E402
 
 MAX_CHARS = 4000
-MAX_PER_K = 3
+MAX_TOTAL = 3
 
 
 def save(argv):
@@ -40,8 +40,8 @@ def save(argv):
         return {"error": "the counterexample must assert the correct behaviour (an assert statement)"}
     d = E.cex_dir()
     have = sorted(glob.glob(os.path.join(d, f"k{k}_*.py")))
-    if len(have) >= MAX_PER_K:
-        return {"error": f"candidate {k} already has {MAX_PER_K} counterexamples"}
+    if len(glob.glob(os.path.join(d, "k*_*.py"))) >= MAX_TOTAL:
+        return {"error": f"already {MAX_TOTAL} counterexamples saved"}
     path = os.path.join(d, f"k{k}_{len(have) + 1}.py")
     with open(path, "w") as fh:
         fh.write(code + "\n")

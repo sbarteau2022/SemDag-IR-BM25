@@ -4,7 +4,7 @@
 
 Owner design (2026-11-17/18): ONE lead agent goes first (6k: plan.py = testing script + code
 review material + the four copies; it writes one assignment per implementer). Only then the 4
-implementers (4k each, parallel), then 4 adversarial reviewers (4k each, parallel), then the final
+implementers (4k each, parallel), then ONE adversarial reviewer (4k; owner 2026-11-18), then the final
 implementer (6k: gate.py = pytest + static typecheck + code review + counterexamples, adopt, fix,
 last test run, one submit).
 Thinking (owner, 2026-11-18): every thinking role has thinking_budget 0, so the harness sends no
@@ -62,13 +62,13 @@ Do the line that starts with ASSIGN {k}. Your own copy of the repository already
 
 Write argument values plainly: no extra quotes inside them. Change code only with edit.py. Never run the full test suite."""
 
-ADVERSARY = THINK + """You are adversarial reviewer {k}. Your target is candidate {k}, a fix for the issue written by implementer {k}. You have at most 3 tool calls and you never edit files.
+ADVERSARY = THINK + """You are the adversarial reviewer. Four implementers each wrote a candidate fix for the issue. You have at most 4 tool calls and you never edit files.
 
-1. Call run_skill_script(skill_name="semdag", file_path="scripts/review_pack.py", args=["{k}"]).
-2. If the candidate is empty, end with: NONE {k} empty.
-3. Otherwise find where this change is still wrong: an input or case the issue describes that the change does not handle, another code path with the same bug, or behaviour that worked before and now breaks.
-4. Write ONE counterexample: a short standalone Python script that imports the package and asserts the CORRECT behaviour from the issue on that input. Save it with run_skill_script(skill_name="semdag", file_path="scripts/save_cex.py", args=["{k}", "<the code>"]). If it reports a syntax error, fix it and save once more.
-5. End with exactly one line: CEX {k} <what the counterexample checks>, or NONE {k} <why no counterexample exists>."""
+1. Call run_skill_script with skill_name semdag, file_path scripts/review_pack.py, args []. It shows every non-empty candidate's diff.
+2. If every candidate is empty, end with: NONE all empty.
+3. Otherwise find where these changes are still wrong: an input or case the issue describes that they do not handle, another code path with the same bug, or behaviour that worked before and now breaks.
+4. Save up to 3 counterexamples, one call each: run_skill_script with skill_name semdag, file_path scripts/save_cex.py, args ["<the candidate number it targets>", "<the code>"]. Each is a short standalone Python script that imports the package and asserts the CORRECT behaviour from the issue. Every counterexample is run against every candidate.
+5. End with one line per counterexample: CEX <k> <what it checks>, or NONE <why no counterexample exists>."""
 
 LEAD = THINK + """You are the lead. You go first; nobody else starts until you have assigned the work. You make one tool call and never edit files.
 
@@ -85,7 +85,7 @@ FINALIZER = THINK + """You are the final implementer. The lead's assignments wer
 
 {assignments?}
 
-Four implementers wrote candidates in `.git/wt_1` .. `.git/wt_4` and four adversarial reviewers saved counterexamples. You work in the main workspace (paths WITHOUT `.git/wt_`). You have at most 12 tool calls.
+Four implementers wrote candidates in `.git/wt_1` .. `.git/wt_4` and the adversarial reviewer saved counterexamples. You work in the main workspace (paths WITHOUT `.git/wt_`). You have at most 12 tool calls.
 
 1. Call run_skill_script with skill_name semdag, file_path scripts/gate.py, args []. It runs pytest, the static typecheck and the code review on every candidate, runs every counterexample against every candidate, and ranks them.
 2. If no candidate changed anything, end with: NO PATCH.
@@ -133,24 +133,20 @@ def build():
     write("skills/semdag/SKILL.md", SKILL_MD)
     for k in range(1, K + 1):
         write(f"prompts/implementer_{k}.md", IMPLEMENTER.format(k=k) + "\n")
-        write(f"prompts/adversary_{k}.md", ADVERSARY.format(k=k) + "\n")
         write(f"sub_agents/implementer_{k}.yaml", agent_yaml(
             f"implementer_{k}", f"Implementer {k} of 4: fixes the issue in its own copy .git/wt_{k}.",
             f"implementer_{k}.md", "sampling_implement.yaml",
             ["read_file", "run_command"], f"cand_{k}"))
-        write(f"sub_agents/adversary_{k}.yaml", agent_yaml(
-            f"adversary_{k}", f"Adversarial reviewer {k}: writes a counterexample for candidate {k}.",
-            f"adversary_{k}.md", "sampling_adversary.yaml", ["read_file"], f"cex_{k}"))
     write("prompts/lead.md", LEAD + "\n")
     write("prompts/finalizer.md", FINALIZER + "\n")
     write("sub_agents/implementers.yaml",
           "name: implementers\ndescription: \"Four implementers in parallel, each in its own copy.\"\n"
           "agent_class: ParallelAgent\nsub_agents:\n"
           + "".join(f"  - config_path: implementer_{k}.yaml\n" for k in range(1, K + 1)))
-    write("sub_agents/adversaries.yaml",
-          "name: adversaries\ndescription: \"Four adversarial reviewers in parallel, one per candidate.\"\n"
-          "agent_class: ParallelAgent\nsub_agents:\n"
-          + "".join(f"  - config_path: adversary_{k}.yaml\n" for k in range(1, K + 1)))
+    write("prompts/adversary.md", ADVERSARY + "\n")
+    write("sub_agents/adversary.yaml", agent_yaml(
+        "adversary", "One adversarial reviewer: counterexamples against all candidates.",
+        "adversary.md", "sampling_adversary.yaml", ["read_file"], "cex"))
     write("sub_agents/lead.yaml", agent_yaml(
         "lead", "Goes first: testing script and code review (plan.py), then one assignment per implementer.",
         "lead.md", "sampling_lead.yaml", ["get_status"], "assignments"))
@@ -164,10 +160,10 @@ def build():
     write("agent.yaml",
           "agent_class: SequentialAgent\nname: v8_ensemble\n"
           "description: >\n  Lead first (testing script + code review, assigns work) -> 4 parallel implementers ->\n"
-          "  4 parallel adversarial reviewers -> final implementer (gate, adopt, last test, submit).\n"
+          "  1 adversarial reviewer -> final implementer (gate, adopt, last test, submit).\n"
           "sub_agents:\n  - config_path: sub_agents/lead.yaml\n"
           "  - config_path: sub_agents/implementers.yaml\n"
-          "  - config_path: sub_agents/adversaries.yaml\n  - config_path: sub_agents/finalizer.yaml\n")
+          "  - config_path: sub_agents/adversary.yaml\n  - config_path: sub_agents/finalizer.yaml\n")
     write("eval_config.yaml",
           "# Owner rules 2026-11-17: 4 min per task; command timeout and tool calls/turns at the\n"
           "# competition defaults (the ensemble needs ~50 tool calls).\n"

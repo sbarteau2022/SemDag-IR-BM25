@@ -74,5 +74,5 @@ def test_v8_ensemble_caps():
     assert (ev["max_time_minutes"], ev["timeout_seconds"], ev["max_tool_calls"], ev["max_turns"]) \
         == (4, 300, 100, 500)
 
-    for prompt in ("implementer_1.md", "adversary_1.md", "lead.md", "finalizer.md"):
+    for prompt in ("implementer_1.md", "adversary.md", "lead.md", "finalizer.md"):
         assert (sub / "prompts" / prompt).read_text().startswith("<|think|>"), prompt

@@ -63,3 +63,7 @@ The rich lane, 5 tasks, all flat layout: rich_3468, rich_3180, rich_3296, rich_3
 - **Sloppy arguments:** all v8 scripts accept nested lists, stringified lists and quoted tokens (run_21). Code text passed to edit.py and save_cex.py is never unquoted.
 - **Server:** back to oMLX, which was faster than vllm-metal on real prompts in run_21. P2 check (`<|think|>` on oMLX) passed: reasoning parsed (210 chars) and the tool call was correct.
 - **run_22:** one task end to end, rich_3468.
+
+## Amendment 2026-11-18 (c): one adversary (owner correction), after run_22
+
+The adversarial stage is ONE agent (4k, `<|think|>`, about 4 tool calls). The earlier "4 for adversarial" meant 4k tokens, not four agents. `review_pack.py []` shows all non-empty candidates, and `save_cex.py` allows up to 3 counterexamples in total. Order: lead 6k → 4 implementers 4k → 1 adversary 4k → final implementer 6k.

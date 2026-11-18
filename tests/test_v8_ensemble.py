@@ -162,3 +162,15 @@ def test_sloppy_arguments_are_accepted(repo):
     assert out.get("ok"), out
     aud = run("audit.py", repo, '"--wt"', '"1"')
     assert aud["wt"] == 1, aud
+
+
+def test_single_adversary_sees_all_candidates(repo):
+    run("plan.py", repo, ISSUE)
+    assert run("review_pack.py", repo).get("empty") is True
+    implement(repo, 1, "return a + b")
+    implement(repo, 3, "return b + a")
+    pack = run("review_pack.py", repo)
+    assert [c["k"] for c in pack["candidates"]] == [1, 3]
+    for i in range(3):
+        assert run("save_cex.py", repo, "1", f"from pkg.calc import add\nassert add({i}, 1) == {i + 1}")["saved"]
+    assert "already 3" in run("save_cex.py", repo, "3", "assert True")["error"]
