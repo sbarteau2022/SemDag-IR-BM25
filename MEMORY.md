@@ -21,6 +21,9 @@ Durable facts for future sessions. One line per fact, newest last in each sectio
 - This folder is a git repo with no remote. GitHub `sbarteau2022/SemDag-IR-BM25` has only the Nov 12 paper and v4 commits, plus open PR #1 (swe_traj_v1 dataset). `MetaSuperIntelligenceLabs-GlobalHack-A-thon-SoloDevTrack` is an unrelated project.
 - Local environment: port 8123 is sometimes taken by a ClickHouse container; use 8124 (model) and 8125 (proxy). fastapi tasks cannot be graded locally (arm64 pydantic-core mismatch).
 - v9_recurrent run_24 vllm-metal smoke resolved 0/2; both tasks timed out at about 244-245 seconds. Full host suite: 147 passed, 3 warnings. (2026-11-18)
+- run_24 edit failures were never whitespace: 4/6 stale text from before the model's own successful edit, 2/6 hallucinated anchors from the code_editor sub-agent (which had no skill access). Audit: `docs/audit_2026-11-19.md`. (2026-11-19)
+- v10_edit_rescue run_25 smoke: 1/3 resolved (requests_7315), edit_file 5/6 ok; rich_3506 failed on a wrong fix, httpx_3672 timed out. Full host suite 163 passed. (2026-11-19)
+- Rules allow 31B and 12B; one model per submission; the Small Model Bonus needs E2B/E4B as one of the two finals, so the other final may use a larger model. E4B-only is a project choice. Quotes: `docs/runs/run_25_RESULTS.md`. (2026-11-19)
 - The project is published to `sbarteau2022/SemDag-IR-BM25`; local `main` tracks the remote interview-review branch until the owner changes the default branch. (2026-11-18)
 
 ## Data and training

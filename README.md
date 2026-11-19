@@ -28,6 +28,7 @@ The paired function Hit@5 difference is −1.7 pp (95% bootstrap interval −7.8
 | `v7_brigade_lite` | parallel lanes | tied v6 (2/11 vs 2/11) |
 | `v8_ensemble` | plan, 4 implementers, adversary, finalizer | 0/5. Stage 1 alone uses the whole 4-minute budget. |
 | `v9_recurrent` | recurrent typed graph (below) | 0/2 smoke run. Localization correct, editing failed. |
+| `v10_edit_rescue` | v9 with the edit path repaired ([audit](docs/audit_2026-11-19.md)) and loop flow in the localizer output | 1/3 smoke run ([run_25](docs/runs/run_25_RESULTS.md)); 5 of 6 edits applied, against 3 of 9 for v9. Not yet measured against v6. |
 
 Every run has a preregistration and a results note in [`docs/runs/`](docs/runs/).
 

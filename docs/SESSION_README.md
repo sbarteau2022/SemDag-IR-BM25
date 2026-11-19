@@ -13,7 +13,7 @@ Solo entry in Kaggle's "Google - The Gemma 4 Developer Agent Competition". Targe
 
 No Kaggle submission has been made yet.
 
-## Where we are (2026-11-18)
+## Where we are (2026-11-19)
 
 Measured on the local MLX stand-in, not on the scorer's 4x L4 vLLM:
 
@@ -26,6 +26,7 @@ Measured on the local MLX stand-in, not on the scorer's 4x L4 vLLM:
 | `v7_brigade_lite` | lane runs | tied v6 (2/11 vs 2/11) |
 | `v8_ensemble` | lead plan, 4 implementers, 1 adversary, finalizer | 0/5 (run_20); timeout on 1 task in run_21 and run_22 |
 | `v9_recurrent` | hybrid recurrent SemDAG candidate | 0/2 vllm-metal smoke (run_24); both timed out |
+| `v10_edit_rescue` | v9 + repaired edit path, flow in locate, working principles | 1/3 vllm-metal smoke (run_25, subprocess sandbox); edit_file 5/6 ok vs 3/9 in run_24 |
 
 Why v8 is stuck: stage 1 (four implementers) uses the whole 4-minute budget locally, so the adversary and finalizer never run. In run_22 the lead's ranked sites were wrong for all four assignments, and one implementer repeated a malformed `run_skill_script` call six times. See `docs/runs/run_22_RESULTS.md`.
 
@@ -40,6 +41,8 @@ Known local defects: the arm64 sandbox image breaks all 67 fastapi tasks (pydant
 - v6 stays frozen as the reference. New work goes in new version folders.
 
 ## Next steps (ordered)
+
+0. (2026-11-19) Measure v10_edit_rescue against v6 on held-out tasks; run the Kaggle L4 timing notebook for E4B and 31B before any larger-model decision (`docs/runs/run_25_RESULTS.md`, larger-model section).
 
 1. Seal a floor zip of v6 (best measured) and make the first Kaggle submission (needs owner approval).
 2. Run the Kaggle L4 timing notebook once: seconds per task, vLLM start-up, projected 120-task time against the 12 h cap.

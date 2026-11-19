@@ -1,0 +1,72 @@
+diff --git a/src/httpx/_parsers.py b/src/httpx/_parsers.py
+index 830fccd..6f8866e 100644
+--- a/src/httpx/_parsers.py
++++ b/src/httpx/_parsers.py
+@@ -342,6 +342,33 @@ class HTTPParser:
+             msg = f"Called 'recv_body' in invalid state {self.recv_state}"
+             raise ProtocolError(msg)
+ 
++        if self.recv_content_length is not None:
++            # Fixed content length: read until all bytes are received
++            remaining = self.recv_content_length - self.recv_seen_length
++            if remaining > 0:
++                body = self.parser.read(size=remaining)
++                self.recv_seen_length += len(body)
++                return body
++            return b''
++
++        # Transfer-Encoding: chunked
++        exc_text = 'reading chunk size'
++        line = self.parser.read_until(b"\\r\\n", max_size=4096, exc_text=exc_text)
++        sizestr, _, _ = line.partition(b";")
++
++        exc_text = "Received invalid chunk size"
++        size = bounded_hex(sizestr, max_digits=8, exc_text=exc_text)
++        if size > 0:
++            body = self.parser.read(size=size)
++            exc_text = 'reading chunk data'
++            self.parser.read_until(b"\\r\\n", max_size=2, exc_text=exc_text)
++            self.recv_seen_length += len(body)
++            return body
++        else:
++            body = b''
++            exc_text = 'reading chunk termination'
++            return body
++
+         if self.recv_content_length is None:
+             # Transfer-Encoding: chunked
+             exc_text = 'reading chunk size'
+@@ -376,13 +403,13 @@ class HTTPParser:
+         return body
+ 
+     def complete(self):
+-        is_fully_complete = self.send_state == State.DONE and self.recv_state == State.DONE
+         is_keepalive = self.send_keep_alive and self.recv_keep_alive
+ 
+-        if not (is_fully_complete and is_keepalive):
++        if not is_keepalive:
+             self.close()
+             return
+ 
++        # Reset state for next request on keep-alive connection
+         if self.mode == Mode.CLIENT:
+             self.send_state = State.SEND_METHOD_LINE
+             self.recv_state = State.WAIT
+diff --git a/src/httpx/_server.py b/src/httpx/_server.py
+index 95226d9..a5fed8b 100644
+--- a/src/httpx/_server.py
++++ b/src/httpx/_server.py
+@@ -98,8 +98,11 @@ class HTTPServer:
+         self.url = f"http://{host}:{port}/"
+ 
+     def wait(self):
+-        while(True):
+-            sleep(1)
++        try:
++            while(True):
++                sleep(1)
++        except KeyboardInterrupt:
++            logger.info("Server shutting down gracefully.")
+ 
+ 
+ @contextlib.contextmanager
