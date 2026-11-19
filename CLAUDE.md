@@ -7,9 +7,9 @@ This document contains the authoritative, non-negotiable operational guidelines,
 <!-- session-start:begin -->
 ## 0. Session Start (owner rule, 2026-11-18)
 
-**Read [README.md](README.md) first, every session**, then [CHECKPOINT.md](CHECKPOINT.md) and [MEMORY.md](MEMORY.md). This folder is the source of truth: it is a git repo with no remote, and GitHub is behind it.
+**Read [docs/SESSION_README.md](docs/SESSION_README.md) first, every session** (the root README.md is the public reviewer-facing page), then [CHECKPOINT.md](CHECKPOINT.md) and [MEMORY.md](MEMORY.md). This folder is the source of truth: it is a git repo whose origin is the public GitHub repo sbarteau2022/SemDag-IR-BM25. Local main must fast-forward onto origin/main; push main at the end of every session (never force-push).
 
-Current state in one paragraph: v6_impact (7/23 on paired23, local MLX) is the best measured and is frozen as the reference. v7 tied it. v8_ensemble scored 0/5 and times out at the 4-minute budget locally. No Kaggle submission has been made. Nov 25 is entry and rules acceptance; Dec 2 is the final deadline. Budget is fixed by the owner at 4 min/task with the competition-default token budgets. Never tune or train on the public tasks. Update README.md and MEMORY.md at the end of every session.
+Current state in one paragraph: v6_impact (7/23 on paired23, local MLX) is the best measured and is frozen as the reference. v7 tied it. v8_ensemble scored 0/5 and times out at the 4-minute budget locally. No Kaggle submission has been made. Nov 25 is entry and rules acceptance; Dec 2 is the final deadline. Budget is fixed by the owner at 4 min/task with the competition-default token budgets. Never tune or train on the public tasks. Update docs/SESSION_README.md and MEMORY.md at the end of every session, and keep the root README.md current.
 <!-- session-start:end -->
 
 ## 1. Executive Summary & Objective

@@ -1,76 +1,76 @@
-# Gemma 4 Developer Agent (E4B): project README
+# SemDAG: graph-guided code localization for a small coding agent
 
-Start here. Every session reads this file first (owner rule, 2026-11-18), then `CHECKPOINT.md`, then `MEMORY.md`.
+This repository is a solo entry in Kaggle's *Gemma 4 Developer Agent* competition. A 4B-parameter model, `gemma-4-e4b-it-qat-w4a16-ct`, has to resolve real GitHub issues inside a sandbox with a 5-minute budget per task. The work has two parts:
 
-## Goal
+1. **SemDAG**, a typed graph IR of a Python repository plus a BM25-seeded walk. It ranks the functions an issue most likely touches. It is evaluated in a paper with a controlled retrieval study.
+2. **An agent line** (v0 to v9), packaged as offline ADK submissions. Each version is a separate, zippable folder, measured end to end on held-out tasks.
 
-Solo entry in Kaggle's "Google - The Gemma 4 Developer Agent Competition". Targets: Top 3 on the main leaderboard and the $10,000 Small Model Bonus. Sole base model: `gemma-4-e4b-it-qat-w4a16-ct`.
+The paper is **[SemDAG: A Controlled Evaluation of Lexical and Graph Retrieval for Code Agents](PaperTrack/Paper_SemDAG.pdf)** ([LaTeX](PaperTrack/Paper_SemDAG.tex)).
 
-| Date (23:59 UTC) | Event |
-|---|---|
-| Nov 25, 2026 | Entry and rules acceptance (by hand, owner) |
-| Dec 2, 2026 | Final submission and Small Model Bonus. E4B must be one of the two selected finals |
+## Results so far
 
-No Kaggle submission has been made yet.
+**Localization (paper, 129 public tasks).** Every primary arm uses the same non-test candidate filter.
 
-## Where we are (2026-11-18)
+| Retriever | Function Hit@5 / 116 | Function Hit@10 / 116 | File Hit@10 / 128 |
+|---|---:|---:|---:|
+| BM25 over live function source | 58 | 68 | 108 |
+| SemDAG, damping 0.15 | 56 | 69 | 111 |
 
-Measured on the local MLX stand-in, not on the scorer's 4x L4 vLLM:
+The paired function Hit@5 difference is −1.7 pp (95% bootstrap interval −7.8 to +4.3), so no function-level advantage is established. That negative result is what motivated v9's graph rewrite.
 
-| Version | State | Result |
+**End to end (local stand-in for the scorer, paired task set).**
+
+| Version | Idea | Result |
 |---|---|---|
-| `v0_baseline` | stock reference; its `eval_config` is 1 min, never zip it | 4/23 |
-| `v2_bm25` | valid | 7/23 |
-| `v6_impact` | frozen reference, best measured | 7/23, 25% faster than v2 |
-| `v6_1_budget` | v6 + `max_output_tokens` 8192 | 1/25 on unseen tasks, 15 fastapi tasks ungradable locally |
-| `v7_brigade_lite` | lane runs | tied v6 (2/11 vs 2/11) |
-| `v8_ensemble` | lead plan, 4 implementers, 1 adversary, finalizer | 0/5 (run_20); timeout on 1 task in run_21 and run_22 |
-| `v9_recurrent` | hybrid recurrent SemDAG candidate | 0/2 vllm-metal smoke (run_24); both timed out |
+| `v0_baseline` | stock reference agent | 4/23 |
+| `v2_bm25` | BM25 localizer | 7/23 |
+| `v6_impact` | SemDAG plus impact analysis (callers, test reach) | 7/23, 25% faster than v2. **Best measured, frozen reference.** |
+| `v7_brigade_lite` | parallel lanes | tied v6 (2/11 vs 2/11) |
+| `v8_ensemble` | plan, 4 implementers, adversary, finalizer | 0/5. Stage 1 alone uses the whole 4-minute budget. |
+| `v9_recurrent` | recurrent typed graph (below) | 0/2 smoke run. Localization correct, editing failed. |
 
-Why v8 is stuck: stage 1 (four implementers) uses the whole 4-minute budget locally, so the adversary and finalizer never run. In run_22 the lead's ranked sites were wrong for all four assignments, and one implementer repeated a malformed `run_skill_script` call six times. See `docs/runs/run_22_RESULTS.md`.
+Every run has a preregistration and a results note in [`docs/runs/`](docs/runs/).
 
-Local model server: **vllm-metal** (owner decision 2026-11-18), on port 8124 behind the telemetry proxy on 8125. It is the only local server: oMLX was removed on 2026-11-18. `Tools/run_eval_seatbelt.sh` defaults to `SERVER=vllm_metal`; `SANDBOX=subprocess` runs tasks without Docker. vllm-metal uses the scorer's vLLM flags but rejects `thinking_token_budget`, so the proxy drops it and the thinking budget is not enforced locally. Earlier runs (run_10 to run_23) used mlx_lm or oMLX.
+## v9: one hybrid recurrent graph
 
-Known local defects: the arm64 sandbox image breaks all 67 fastapi tasks (pydantic-core mismatch), so local grading covers rich, requests and httpx only. The scorer is x86_64 and unaffected.
+The first SemDAG graph was forward-only: containment, calls and imports. It could not represent a loop or a recursion, which is often exactly where the bug is. v9 ([`semdag_ir_ast.py`](AgenticSubmission/v9_recurrent/skills/semdag/scripts/semdag_ir_ast.py)) keeps one typed graph and adds recurrence to it:
 
-## Decisions on record
+- **Loop nodes** for `for`, `while`, async loops and comprehensions. Each has a `loop_back` self-edge, its loop-carried variables (upward-exposed uses that are also written in the body), its exits, and `loop_calls` edges to what the body calls.
+- **Recursion.** `recurses` edges, plus one recursion node per call-graph SCC (Tarjan) with `member_of` edges. Every function gets a `topo_rank` from the condensed call DAG, so ordering stays acyclic even though the graph is not.
+- **Inverse edges** for every relation (`called_by`, `contained_in`, ...), so impact analysis walks callers directly.
+- **Better resolution:** src-layout packages, re-exports, `self`/`cls` through the MRO, `super()`, instantiation and inheritance edges, `@overload` stubs, and local shadowing of imports.
 
-- Budget (owner rule): `max_time_minutes 4`, `timeout_seconds 300`, `max_tool_calls 40`, `max_turns 60`, max_output 16384, thinking 4096. Do not ask to change.
-- Never tune or train on the public competition tasks. The 6,874-row `LoRAData/final` set is demoted for that reason.
-- v6 stays frozen as the reference. New work goes in new version folders.
+On four outside repositories (attrs, click, jinja, marshmallow), resolved call edges went from 444/435/731/147 to 751/2137/1245/915. The graph has 888 loop nodes and 13 recursion SCCs (one of them is jinja's 22-function parser cycle). Builds take under 0.5 s. [`flow.py`](AgenticSubmission/v9_recurrent/skills/semdag/scripts/flow.py) gives the agent a compact view of any function's loops, recursion, callers and callees, and 13 tests cover the graph ([`tests/test_semdag_recurrent.py`](tests/test_semdag_recurrent.py)).
 
-## Next steps (ordered)
+**What the smoke run showed.** On one task, v9 ranked the right function #2 and attached the note "loop carrying `cell_pos`, `pos`: check first/last iteration". That is the actual bug. The model ignored the note and 6 of its 10 edits failed to apply. The bottleneck is now the editing step, not localization, and that is the next piece of work.
 
-1. Seal a floor zip of v6 (best measured) and make the first Kaggle submission (needs owner approval).
-2. Run the Kaggle L4 timing notebook once: seconds per task, vLLM start-up, projected 120-task time against the 12 h cap.
-3. Decide whether v8 can fit 4 minutes (fewer implementers, or lead-first plus one implementer) or is dropped.
-4. Fix local fastapi grading (amd64 image or arm64 pydantic-core wheel overlay).
-5. Failure-driven dataset pilot, after sign-off on `Designs/FAILURE_DRIVEN_DATASET.md` section 6.
-
-## Open questions for the owner
-
-- Approve the floor submission and the first daily submit.
-- fastapi local-grading fix choice.
-- Decide whether the interview-review branch should become the repository's default branch.
-
-## Map
+## Layout
 
 | Path | What |
 |---|---|
-| `CHECKPOINT.md` | last resume point (written 2026-11-17, before v8) |
-| `CLAUDE.md`, `AGENTS.md` | operating rules, constraints, commands |
-| `MEMORY.md` | index of project memory and where to find durable facts |
-| `AgenticSubmission/` | versions v0 to v8, each a zippable submission folder |
-| `docs/runs/` | preregistrations and results for every run |
-| `results/` | raw run outputs and `telemetry.sqlite` |
-| `Tools/` | local runner, MLX server scripts, telemetry, v8 builder |
-| `Designs/` | audits, roadmap, dataset and LoRA designs |
-| `competition-constraints/`, `Rules/`, `DataSets/` | official rules and data (DataSets is gitignored) |
-| `SemDag-IR-BM25/` | ignored local clone of the public GitHub repo |
+| [`AgenticSubmission/`](AgenticSubmission/) | Agent versions v0 to v9, each a self-contained submission folder |
+| [`PaperTrack/`](PaperTrack/) | Paper source, PDF and measurement scripts with JSON receipts |
+| [`docs/runs/`](docs/runs/) | Preregistrations and results for every evaluation run |
+| [`results/`](results/) | Raw run outputs, traces and telemetry |
+| [`Tools/`](Tools/) | Local runner (vLLM on Apple silicon), telemetry proxy |
+| [`Designs/`](Designs/) | Audits, roadmap, dataset and LoRA designs |
+| [`docs/SESSION_README.md`](docs/SESSION_README.md) | Working notes and session protocol |
 
-## Session start protocol
+## Run the localizer
 
-1. Read this README.md, then CHECKPOINT.md and MEMORY.md.
-2. `git log --oneline -10` and `git status`: the folder is the source of truth, GitHub is behind.
-3. Check `docs/runs/` for the newest `run_*_RESULTS.md` before proposing work.
-4. At the end of a session, update the "Where we are" table here and add a dated line to MEMORY.md.
+The skill uses only Python's standard library:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  AgenticSubmission/v9_recurrent/skills/semdag/scripts/repo_eval.py \
+  local-task /absolute/path/to/python/repository \
+  --problem 'Describe the issue with exact identifiers and error text'
+```
+
+Add `--flow Class.method` to see the recurrent structure of one function. To reproduce the paper, see [`PaperTrack/`](PaperTrack/) and `requirements-research.txt`.
+
+## Limits
+
+Dynamic dispatch and runtime imports stay unresolved. End-to-end numbers come from a local Apple-silicon stand-in, not the scorer's 4×L4 vLLM. Local grading covers rich, requests and httpx only, because fastapi tasks fail on the arm64 image. No Kaggle submission has been made yet.
+
+Licensed under Apache 2.0; see [LICENSE](LICENSE).
