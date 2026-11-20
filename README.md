@@ -29,6 +29,7 @@ The paired function Hit@5 difference is −1.7 pp (95% bootstrap interval −7.8
 | `v8_ensemble` | plan, 4 implementers, adversary, finalizer | 0/5. Stage 1 alone uses the whole 4-minute budget. |
 | `v9_recurrent` | recurrent typed graph (below) | 0/2 smoke run. Localization correct, editing failed. |
 | `v10_edit_rescue` | v9 with the edit path repaired ([audit](docs/audit_2026-11-19.md)) and loop flow in the localizer output | 1/3 smoke run ([run_25](docs/runs/run_25_RESULTS.md)); 5 of 6 edits applied, against 3 of 9 for v9. Not yet measured against v6. |
+| `v11_task_ir` | The issue is typed (traceback frames, literals, qualnames) and anchored in the code graph before BM25; the localizer prints one ~400-character action; edits go only through line ranges; verify blocks a patch that misses the located loop or rewrites a file ([README](AgenticSubmission/v11_task_ir/README.md)) | Smoke run 1/3, and that one resolve is an empty patch; 5 of 5 edits applied ([run_26 to run_28](docs/runs/run_26_28_RESULTS.md)). Not yet measured against v6. |
 
 Every run has a preregistration and a results note in [`docs/runs/`](docs/runs/).
 

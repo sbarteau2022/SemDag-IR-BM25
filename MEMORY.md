@@ -23,6 +23,7 @@ Durable facts for future sessions. One line per fact, newest last in each sectio
 - v9_recurrent run_24 vllm-metal smoke resolved 0/2; both tasks timed out at about 244-245 seconds. Full host suite: 147 passed, 3 warnings. (2026-11-18)
 - run_24 edit failures were never whitespace: 4/6 stale text from before the model's own successful edit, 2/6 hallucinated anchors from the code_editor sub-agent (which had no skill access). Audit: `docs/audit_2026-11-19.md`. (2026-11-19)
 - v10_edit_rescue run_25 smoke: 1/3 resolved (requests_7315), edit_file 5/6 ok; rich_3506 failed on a wrong fix, httpx_3672 timed out. Full host suite 163 passed. (2026-11-19)
+- v11_task_ir (2026-11-20): the issue is typed (frames, literals, qualnames) and anchored before BM25; fix_edit line ranges are the only edit path. E4B needed fix_edit to accept one packed string and escaped `\n`, and could not count lines from read_file (removed). Smoke run_28: 1/3, and that one resolve is an empty patch. Results: `docs/runs/run_26_28_RESULTS.md`.
 - Rules allow 31B and 12B; one model per submission; the Small Model Bonus needs E2B/E4B as one of the two finals, so the other final may use a larger model. E4B-only is a project choice. Quotes: `docs/runs/run_25_RESULTS.md`. (2026-11-19)
 - The project is published to `sbarteau2022/SemDag-IR-BM25`; local `main` tracks the remote interview-review branch until the owner changes the default branch. (2026-11-18)
 

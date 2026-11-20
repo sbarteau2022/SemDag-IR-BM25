@@ -27,6 +27,7 @@ Measured on the local MLX stand-in, not on the scorer's 4x L4 vLLM:
 | `v8_ensemble` | lead plan, 4 implementers, 1 adversary, finalizer | 0/5 (run_20); timeout on 1 task in run_21 and run_22 |
 | `v9_recurrent` | hybrid recurrent SemDAG candidate | 0/2 vllm-metal smoke (run_24); both timed out |
 | `v10_edit_rescue` | v9 + repaired edit path, flow in locate, working principles | 1/3 vllm-metal smoke (run_25, subprocess sandbox); edit_file 5/6 ok vs 3/9 in run_24 |
+| `v11_task_ir` | problem IR -> anchor -> loop locus; 400-char locate; fix_edit line range is the only edit path; verify blocks off-locus and whole-file patches; 5 calls, no sub-agent | 1/3 smoke (run_28), and the one resolve is an empty patch; fix_edit 5/5 applied; offline anchor beats BM25 rank 1 on qualname tasks (19/26 vs 10/26). Not yet run on paired23 |
 
 Why v8 is stuck: stage 1 (four implementers) uses the whole 4-minute budget locally, so the adversary and finalizer never run. In run_22 the lead's ranked sites were wrong for all four assignments, and one implementer repeated a malformed `run_skill_script` call six times. See `docs/runs/run_22_RESULTS.md`.
 
@@ -41,6 +42,8 @@ Known local defects: the arm64 sandbox image breaks all 67 fastapi tasks (pydant
 - v6 stays frozen as the reference. New work goes in new version folders.
 
 ## Next steps (ordered)
+
+00. (2026-11-20) Run v11_task_ir on paired23 against v6's 7/23 (`docs/runs/run_26_28_RESULTS.md`). Before a LoRA on the graph, v11 must beat v6 there.
 
 0. (2026-11-19) Measure v10_edit_rescue against v6 on held-out tasks; run the Kaggle L4 timing notebook for E4B and 31B before any larger-model decision (`docs/runs/run_25_RESULTS.md`, larger-model section).
 
