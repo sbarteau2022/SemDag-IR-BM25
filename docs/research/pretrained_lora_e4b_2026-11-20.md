@@ -65,3 +65,65 @@ Extraction keeps only the top singular directions, and the result again sits on 
 - Whether vLLM 0.19.1 accepts `per_layer_*` LoRA targets, and whether it errors or skips on k/v for KV-shared layers. Both were read from 0.33 source only.
 - Licenses: two shortlisted models carry no license tag. The competition requires winners to release under a license that does not limit commercial use.
 - Contamination: TermGrade is Linux terminal tasks and Nemotron-Agentic is synthetic tool use. Neither names fastapi, rich, requests or httpx, but neither was scanned.
+
+
+## Update (same day): Kaggle, ModelScope, GitHub, arXiv
+
+Sources:
+- Kaggle CLI: `kaggle models list --search …`, `kaggle kernels list --competition gemma-4-developer-agent -s …`, `kaggle datasets list -s …`, and model and dataset metadata.
+- `gh search repos` and `gh search code`.
+- Web search scoped to modelscope.cn and arXiv.
+
+Only metadata and cards were read. Nothing was downloaded.
+
+### The one competition-grade E4B adapter: Kaggle, not Hugging Face
+
+[`omallo/gemma4-e4b-swe-agent-lora-from-31b`](https://www.kaggle.com/models/omallo/gemma4-e4b-swe-agent-lora-from-31b) (Kaggle Models, v1, 69.8 MB, Apache 2.0). From its card:
+
+- Built for `gemma-4-e4b-it-qat-w4a16-ct` itself: trained on the scorer's int4 checkpoint unpacked to bf16, with prompts re-rendered through the scorer's chat template and checked token by token against vLLM.
+- Rank 16 on q, k, v, o, gate, up and down. Trained at alpha 32 (scale 2.0) and served at alpha 16 (scale 1.0); the card says scale 2.0 scored lower on every set. Two epochs, learning rate 1e-4.
+- Data: 485 resolved Gemma 4 31B trajectories under the competition harness, 425 from a validated SWE-rebench pool and **60 from the competition's public tasks**.
+- Results under the harness (28 tool calls, 8 minutes per task, three runs):
+
+  | Set | Plain E4B | With the adapter | 31B |
+  |---|---|---|---|
+  | held-out 47 | 9.7 | **19.7** (sign test p < 0.001) | 36.3 |
+  | large 49 | 8.3 | 12.7 (p = 0.12) | — |
+  | SWE-bench Verified 50 | 11.3 | 10.3 | — |
+
+- Companion dataset [`omallo/gemma4-swe-agent-lora-distillation`](https://www.kaggle.com/datasets/omallo/gemma4-swe-agent-lora-distillation) (CC BY 4.0): validated task sets `heldout48` and `large49`, 3,286 graded traces, and **767 resolved 31B trajectories plus 950 DeepSeek V4.1 Flash trajectories in the organisers' trace format**. The 425 non-public training trajectories are flagged.
+- Caveats:
+  - The 60 public-task trajectories mean the adapter's score on our paired23 overstates it. Adopting it as-is also conflicts with our rule never to train on public tasks.
+  - It was measured at 8 minutes per task; we run 4 minutes, and LoRA adds latency.
+  - It was measured with the author's prompt and tools, not ours.
+
+### Others found on Kaggle (none drop-in)
+
+- Adapters for the 31B base only: `scottweeden/gemma-4-31b-swe-tool-use-lora` (with an Apache-2.0 recipe kit), `robinamirbahar/gemma-4-31b-loop-breaker-lora`, `robinamirbahar/gemma-4-ccr-loop-breaker`. Also on Hugging Face: `karthik-a/sparkflashxgemma4` (31B).
+- `karthikvattem/gemma-4-e4b-pallas-lora` writes JAX Pallas TPU kernels, a different domain.
+- Notebooks with E4B training code: `nooktablet/gemma-4-e4b-oracle-sft-scripts`, `boristown/gemma-4-e2b-lora-fine-tuning-swe-agent-baseline`, `fjnulinweisong/gemma-agent-trajectory-sft`, `kevindiazcordova/gemma-4-validated-oracle-trajectories`, `dmitriigluzdov/gemma-4-serving-and-lora-verification-kit` (a dataset, 766 MB).
+
+### Training-data candidates (if we train our own)
+
+| Source | What | License |
+|---|---|---|
+| `omallo/gemma4-swe-agent-lora-distillation` | 425 clean + 342 more resolved Gemma 4 31B trajectories and 950 DeepSeek V4.1 Flash trajectories, in harness trace format | CC BY 4.0 |
+| `adesolanke/gemma4-swe-agent-trajectories` | nebius SWE-rebench OpenHands trajectories (Qwen3-Coder-480B) converted to the harness tools, with a curated top-40% subset; conversion code in `damsolanke/gemma4-swe-kit` | CC BY 4.0 |
+| `jayp2005/berth-swe-tasks` | 653 harness-compatible offline tasks from 24 permissive libraries: `extended` (350) for training, `core` (301) for evaluation | Apache 2.0 |
+| `nvidia/SWE-Zero2Hero` (HF, [arXiv 2604.01496](https://arxiv.org/abs/2604.01496)) | execution-free then execution-based SWE SFT data distilled from open frontier models | CC BY 4.0 (paper) |
+| our `DataSets/swe_traj_v1` | 791 synthetic verified trajectories, excluding the four test repos | ours |
+
+Each needs filtering against fastapi, rich, requests and httpx before use.
+
+### ModelScope, GitHub, arXiv
+
+- **ModelScope:** mirrors of `google/gemma-4-E4B(-it)` and LoRA tutorial posts (emotion classification). No coding or agent adapters.
+- **GitHub:** no repo ships an E4B SWE adapter.
+  - `berkayaybar14/gemma4-e4b-swe-harness` (GPL-3.0) is a harness study: 3-5/25 on SWE-bench Verified.
+  - `damsolanke/gemma4-swe-kit` is a local scorer replica and trajectory converter.
+  - Many competition starter repos exist.
+- **arXiv:** no paper releases an E4B SWE adapter.
+  - Relevant: [2610.33958](https://arxiv.org/abs/2610.33958) (small agents and code-graph tools; E4B localization rises from 18.0 with grep alone to 32.4 with all tools).
+  - [2604.01496](https://arxiv.org/abs/2604.01496) is NVIDIA's SWE-Zero to SWE-Hero SFT recipe and data.
+  - [2611.23205](https://arxiv.org/abs/2611.23205) is E4B QLoRA on MATLAB code; it reports a 17-19% adapter speed cost.
+- **Also missed on the first Hugging Face pass:** `RedTeamLab/Gemma-4-E4B-Sol-Traces-v3` (Hermes-agent tool traces, r16, language modules only, 35 MB adapter folder, Gemma license). It is tagged as GGUF, not as an adapter.
