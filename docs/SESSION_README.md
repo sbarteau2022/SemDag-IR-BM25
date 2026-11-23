@@ -89,3 +89,7 @@ Current candidate tested: v13_orchestrator, Gemma E4B only, macOS Seatbelt plus 
 ## v13 edit/tool design awaiting approval (2026-11-22)
 
 New real-source component probes reproduced off-assignment editing, unverified stale central overwrite, and an accepted stale-coordinate edit inserting a duplicate assignment. No implementation changed. Proposed native edit transactions and fused lifecycle calls first, then a separate subagent-policy experiment after successful-edit timing exists. Design: [.10x spec](../.10x/specs/2026-11-22-v13-edit-tool-policy.md). Local receipts: reports/v13_edit_policy_design_2026-11-22/.
+
+## 2026-11-23: v13 Stage 1 transactions
+
+Approved native edit/tool transaction implementation completed. Scope/hash/single-use guards, atomic source writes, fused prepare/finalize, independent verification and conditional rollback are in v13. 247 full host tests and official validation pass. Final fixed-source component comparison: 9→4 modeled control ops, 0.142612→0.149561 s (+4.87%), identical output; gate passes. E4B smoke on the same external Dask development issue: 0/1 resolved, 104.39s, empty patch, no managed/edit/apply or editor dispatch; root used raw shell routes. No live adoption/promotion. See [report](runs/v13_STAGE1_2026-11-23.md). Next: review [.10x role-capability proposal](../.10x/specs/2026-11-23-v13-role-capability-policy.md); no numeric editor thresholds before successful E4B editor timings.

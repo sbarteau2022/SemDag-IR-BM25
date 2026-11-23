@@ -1,0 +1,15 @@
+# v13 role capability policy — proposed next pass
+
+Status: PROPOSED; no Stage 2 implementation. Motivation: Stage 1 native gates pass, but the live root bypassed them through six shell calls and never dispatched an editor or produced a patch.
+
+Recommended first policy experiment: remove run_command from root and both editors; preserve E4B, budgets, editor count, ambiguity rule and retry count. Give root only its official status/submit/delegation tools plus a role-specific skill entry exposing prepare/finalize/status. Give editors a role-specific entry exposing view/edit/status. Static action allowlists are checked in native code before state or file mutation; user-provided flags cannot change roles. Keep a single canonical skill name and simple script path per role if the compiler supports independent resource registration.
+
+Dependencies move to readable non-executable skill assets; only the role entry is registered as an executable script. The installed SDK skill_toolset.py materializes assets and scripts separately and looks up run_skill_script targets only in registered scripts. Prove this with actual compiled root/editor toolsets: wrong-role actions, helper paths, path traversal and asset execution must fail. Do not modify the official harness, introduce host adapters, invent missing tool arguments or claim the existing broad scripts are capability-safe merely because prompts say so. Native role entrypoints perform computation/authorization, not prompt rewriting.
+
+Alternative: keep a general shell for convenience. Rejected for this experiment because the measured root repeatedly chose it over the managed path. Alternative: change prompts only. Already insufficient in the Stage 1 smoke. A broader declarative sequence/conditional policy may be investigated later if supported, but is not assumed to solve dispatch gating.
+
+Limits: root agent_tool/submit remain callable. Capability restriction does not itself prevent wasted unprepared dispatch or empty submit. Existing transaction guards reject native edits without state, but cannot stop the first model call into a subagent. Full adversarial host confinement remains outside the current Seatbelt/subprocess profile.
+
+Preregister before the next comparison: unchanged model/budgets/tasks; all role and executable-surface denial cases pass; legitimate prepare -> editor edit -> finalize succeeds using compiled toolsets; zero generic shell/tool-helper bypasses; official package validation and full host suite. Real E4B smoke must show successful preparation, managed edit and outside-verified apply before any policy adoption claim. Task resolution is separate; require paired external held-out evidence before promotion. Freeze additional case selection and repetitions before running. No timing or retry thresholds are selected until successful editor timing exists.
+
+Deliver a measured comparison against the sealed Stage 1 source, retaining failures. No Kaggle submission, model training, other-model fallback, Docker or host-agent delegation.

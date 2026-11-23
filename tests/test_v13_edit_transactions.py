@@ -192,3 +192,13 @@ def test_crash_lost_metadata_fails_closed(modules,repo,loss):
     assert (repo/'sample.py').read_bytes()==before
     fe=importlib.import_module('fix_edit')
     with pytest.raises(ValueError):fe.run('sample.py','L2-2','    return 3',repo=wm._ws_dir('1'))
+
+
+def test_fused_prepare_through_real_localizer_and_finalize(modules,repo):
+    tx,wm=modules
+    prepared=tx.prepare('sample.value returns 1 but must return 2',30,str(repo),'1')
+    assert prepared['ok'] and prepared['baseline']['exit_code']==0
+    assert 'return 1' in prepared['text']
+    h=tx.edit(prepared['handle'],'def value():\n    return 2',str(repo),'1')['handle']
+    assert tx.finalize(h,str(repo),'1')['ok']
+    assert (repo/'sample.py').read_text()=='def value():\n    return 2\n'

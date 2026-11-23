@@ -1,2 +1,2 @@
 # Status
-Stage 1 component verification complete: 246 host tests and official validation pass; final-source native call/time gate passes. E4B development smoke in progress. No live edit or task-resolution gain claimed. Stage 2 dispatch policy not changed.
+Stage 1 code/component verification complete: 246 tests, official validation, native call/time gate pass. E4B smoke 0/1, empty patch, no managed edit/apply or subagent dispatch. Live adoption and promotion gates NOT met. Stage 2 role-capability design proposed for owner review; no policy tuning implemented.

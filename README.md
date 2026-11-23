@@ -95,4 +95,5 @@ A repository-disjoint external Dask issue qualifies the grading path: an empty p
 
 The v13 live diagnostic runs both remained unresolved with empty patches; the rerun hit the four-minute limit. No task-resolution improvement is established. Full findings and limitations: [v13 qualification report](docs/runs/v13_QUALIFICATION_2026-11-22.md).
 
-Stage 1 v13 native transactions bind edits to source versions and combine lifecycle operations. Component comparison reduced control operations 9→4 with identical output and +5.07% median native overhead, within the preregistered limit. E4B live validation and subagent-policy evidence remain separate gates. See [v13 implementation notes](AgenticSubmission/v13_orchestrator/README.md).
+
+Final Stage 1 result: 247 host tests pass; native component gate passes (9→4 modeled control operations, +4.87% median native overhead, identical output). E4B live adoption failed: no managed edits, no editor dispatch and an empty patch. Candidate remains experimental. See [Stage 1 findings](docs/runs/v13_STAGE1_2026-11-23.md).

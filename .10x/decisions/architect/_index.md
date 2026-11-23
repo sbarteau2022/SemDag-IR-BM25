@@ -1,3 +1,3 @@
 # Active architecture decisions
 - v13-isolation-qualification: measured component fixes, no task gain.
-- v13-edit-tool-policy: proposed, awaiting owner review.
+- v13-edit-tool-policy: Stage 1 component gates pass; live adoption/promotion failed; Stage 2 role-capability design proposed.
