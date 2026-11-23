@@ -274,3 +274,16 @@ def test_slot_specific_cache_metadata_and_other_cache_poisoning(modules,repo):
     h=tx.edit(one['handle'],replacement,str(repo),'1')['handle']
     assert tx.finalize(h,str(repo),'1')['ok']
     assert 'range(3)' in (repo/s1['file']).read_text()
+
+
+def test_baseline_clock_is_conservative_and_expired_future_missing_fail(modules,repo,monkeypatch,tmp_path):
+    tx,wm=modules
+    stamp=int(subprocess.run(['git','show','-s','--format=%ct','refs/tags/_swegemma_baseline'],cwd=repo,capture_output=True,text=True,check=True).stdout)
+    monkeypatch.setattr(tx.time,'time',lambda:stamp+10.25)
+    assert tx.task_remaining(repo)==pytest.approx(229.75)
+    monkeypatch.setattr(tx.time,'time',lambda:stamp+240)
+    with pytest.raises(TimeoutError):tx.task_remaining(repo)
+    monkeypatch.setattr(tx.time,'time',lambda:stamp-1)
+    with pytest.raises(ValueError,match='future'):tx.task_remaining(repo)
+    empty=tmp_path/'no-clock';empty.mkdir()
+    with pytest.raises(tx.BudgetAnchorUnavailable):tx.task_remaining(empty)

@@ -39,18 +39,35 @@ def dispatch(role, bound_slot, argv):
         values = argv[1:]
         if not values:
             raise ValueError("native action required")
+        import re
+        if len(values) == 1:
+            packet = re.fullmatch(r"view\s*,\s*(\d+)\s*,\s*(\d+)\s*", values[0])
+            if packet:
+                values = ["view", packet[1], packet[2]]
+            elif values[0].startswith(("edit,", "edit_lines,")):
+                raise ValueError("comma-packed writes are ambiguous; supply separate positional_args elements: edit_lines, HANDLE, each code line")
         action = values[0]
-        arities = {"prepare": (4,), "edit": (3,), "view": (3,), "finalize": (3,), "status": (1, 2)}
-        if action not in arities or len(values) not in arities[action]:
+        arities = {"prepare": (3, 4), "edit": (3, 4), "view": (2, 3), "finalize": (3,), "status": (1, 2)}
+        if action == "edit_lines":
+            if len(values) < 3:
+                raise ValueError("edit_lines requires a handle and explicit replacement lines")
+        elif action not in arities or len(values) not in arities[action]:
             raise ValueError("invalid native positional action or field count")
         fields = dict(prepare=None, finalize=None, view=None, edit=None, status=False,
-                      slot=None, remaining=None, text=None, lines=None)
+                      slot=None, remaining=None, text=None, lines=None, current_view=False, expected_view=None)
         if action == "prepare":
-            fields.update(prepare=values[1], remaining=float(values[2]), slot=values[3])
+            fields.update(prepare=values[1], remaining=float(values[2]) if len(values)==4 else None, slot=values[-1])
+        elif action == "edit_lines":
+            fields.update(edit=values[1], text="\n".join(values[2:]))
         elif action == "edit":
-            fields.update(edit=values[1], text=values[2])
+            fields.update(edit=values[1], text=values[-1], expected_view=values[2] if len(values)==4 else None)
         elif action == "view":
-            fields.update(view=values[1], lines=values[2])
+            if len(values)==2:
+                fields.update(view="current", lines=values[1], current_view=True)
+            elif values[1].isdigit() and values[2].isdigit():
+                fields.update(view="current", lines=values[1]+"-"+values[2], current_view=True)
+            else:
+                fields.update(view=values[1], lines=values[2])
         elif action == "finalize":
             fields.update(finalize=values[1], slot=values[2])
         else:
@@ -85,20 +102,51 @@ def dispatch(role, bound_slot, argv):
         tx.check_versions(state)
         return {**tx.view_result(state), "state": state["state"]}
     if action == "prepare":
-        if args.remaining is None or not 0 < args.remaining <= 240:
-            raise ValueError("remaining seconds from get_status required (0 < seconds <= 240)")
-        return tx.prepare(args.prepare, args.remaining, repo, slot)
+        if args.remaining is None:
+            remaining = tx.task_remaining(repo)
+            source = "baseline tag (conservative)"
+        else:
+            if not 0 < args.remaining <= 240:
+                raise ValueError("remaining seconds must be within the four-minute limit")
+            remaining, source = args.remaining, "explicit remaining"
+            try:
+                remaining = min(remaining, tx.task_remaining(repo))
+                source = "minimum of baseline clock and explicit remaining"
+            except tx.BudgetAnchorUnavailable:
+                pass
+        out = tx.prepare(args.prepare, remaining, repo, slot)
+        out["budget_source"] = source
+        return out
     if action == "finalize":
         return tx.finalize(args.finalize, repo, slot)
     if action == "edit":
         if args.text is None:
             raise ValueError("replacement text required")
+        if getattr(args, "expected_view", None) is not None:
+            import re
+            if not re.fullmatch(r"L?\d+(?:-\d+)?", args.expected_view):
+                raise ValueError("explicit edit range is invalid")
+            bounds=args.expected_view.lstrip("L").split("-")
+            expected=[int(bounds[0]),int(bounds[-1])]
+            _,state=tx.load_handle(args.edit,repo,slot)
+            if expected!=state["view"]:
+                raise ValueError("edit range must equal the issued view; read/narrow first")
         return tx.edit(args.edit, args.text, repo, slot)
     import re
-    if not args.lines or not re.fullmatch(r"L?\d+-\d+", args.lines):
+    if not args.lines or not re.fullmatch(r"L?\d+(?:-\d+)?", args.lines):
         raise ValueError("numbered range A-B required")
-    a,b = map(int,args.lines.lstrip("L").split("-"))
-    return tx.narrow(args.view,a,b,repo,slot)
+    bounds=args.lines.lstrip("L").split("-");a,b=int(bounds[0]),int(bounds[-1])
+    handle=args.view
+    if getattr(args, "current_view", False):
+        path=tx.state_path(repo,slot)
+        if not path.exists():
+            raise ValueError("slot is unprepared")
+        state=json.loads(path.read_text())
+        if state["state"] not in ("prepared","edited"):
+            raise ValueError("no active readable assignment")
+        tx.check_versions(state)
+        handle=state["handle"]
+    return tx.narrow(handle,a,b,repo,slot)
 
 
 def main(role, bound_slot=None, argv=None):
@@ -106,5 +154,8 @@ def main(role, bound_slot=None, argv=None):
         out = dispatch(role, bound_slot, list(sys.argv[1:] if argv is None else argv))
     except Exception as exc:
         out = {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:1800]}
+    if role == "editor" and out.get("ok") and out.get("handle"):
+        out["edit_prefix"]=["edit_lines",out["handle"]]
+        out["edit_contract"]="Append replacement code as separate array elements, preserving spaces; never pack commas. Use the new handle after view."
     print(json.dumps(out,ensure_ascii=False,separators=(",",":")))
     return out

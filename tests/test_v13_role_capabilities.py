@@ -203,19 +203,32 @@ def test_declared_positional_schema_and_no_mixed_array_arguments(compiled):
     assert out['error_code']=='INVALID_ARGUMENTS'
 
 
+@pytest.mark.parametrize('role,values',[
+    ('root',['edit_lines','unknown','pass']),('root',['view','1','2']),
+    ('root',['view,1,2']),('editor_1',['edit_lines','unknown']),
+    ('editor_1',['edit,unknown,return 2']),('editor_1',['edit_lines,unknown,return 2']),
+    ('editor_1',['view','1','999999']),
+])
+def test_native_contextual_forms_fail_safely(compiled,role,values):
+    manager,roles=compiled;before=manager.read_file('sample.py')
+    out=payload(positional(roles,role,values));assert not out['ok'],out
+    assert manager.read_file('sample.py')==before
+
+
 def test_actual_sdk_positional_lifecycle(compiled):
     manager,roles=compiled
     manager.write_file('sample.py','def value():\n    return 10\n')
     for command in ['git add sample.py','git commit -qm positional-base','git tag -f _swegemma_baseline']:
         assert manager.run_command(command).exit_code==0
-    prepared=payload(positional(roles,'root',['prepare','sample.value returns 10 but must return 11','60','1']))
-    assert prepared['ok'],prepared
-    own=payload(positional(roles,'editor_1',['status']));assert own['ok'],own
-    edited=payload(positional(roles,'editor_1',['edit',own['handle'],'def value():\n    return 11']))
+    prepared=payload(positional(roles,'root',['prepare','sample.value returns 10 but must return 11','1']))
+    assert prepared['ok'] and 'baseline' in prepared['budget_source'],prepared
+    own=payload(positional(roles,'editor_1',['view,2,2']));assert own['ok'],own
+    assert own['edit_prefix']==['edit_lines',own['handle']]
+    edited=payload(positional(roles,'editor_1',own['edit_prefix']+['    result = 11','    return result']))
     assert edited['ok'],edited
     applied=payload(positional(roles,'root',['finalize',edited['handle'],'1']))
     assert applied['ok'] and applied['state']=='applied',applied
-    assert manager.read_file('sample.py')=='def value():\n    return 11\n'
+    assert manager.read_file('sample.py')=='def value():\n    result = 11\n    return result\n'
 
 
 def test_role_engines_are_identical_and_only_entries_differ():

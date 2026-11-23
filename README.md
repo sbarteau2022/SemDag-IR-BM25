@@ -105,3 +105,5 @@ Role-policy result: 272 host tests and actual SDK role/lifecycle fixtures pass. 
 The v13 protocol investigation adds a compatible native grammar for the SDK’s concretely typed positional_args field and aligns skill discovery/loading with SDK instructions. Simple raw/chat probes pass; full-context generation still exhibits wrong-skill routing. Live milestone results remain separate from component proof.
 
 Recent v13 live execution exposed assignment/cache and compilation-context defects; repairs isolate per-assignment verification and preserve unchanged-candidate reassignment. 296 host tests pass. The newer source exceeds the native microbenchmark overhead gate (+15.44%); no performance promotion is claimed. Live workflow verification remains separate.
+
+v13’s native controller now owns conservative task-clock calculation and accepts explicit line-array edits, removing model-side clock copying and ambiguous write packets. Live workflow evidence remains the qualification gate; failed trials and the native overhead-gate failure are retained.

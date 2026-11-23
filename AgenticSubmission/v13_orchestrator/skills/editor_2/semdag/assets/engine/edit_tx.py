@@ -174,6 +174,27 @@ def view_result(s):
             'remaining_seconds': round(max(0, s['deadline'] - time.monotonic()), 2)}
 
 
+class BudgetAnchorUnavailable(ValueError):
+    pass
+
+
+def task_remaining(repo):
+    """Conservative task clock: harness baseline tag precedes agent loop start."""
+    try:
+        result = subprocess.run(['git', 'show', '-s', '--format=%ct', 'refs/tags/_swegemma_baseline'],
+                                cwd=repo, capture_output=True, text=True, check=True, timeout=5)
+        started = int(result.stdout.strip())
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise BudgetAnchorUnavailable('live baseline clock unavailable; use the explicit remaining form') from exc
+    now = time.time()
+    if started > now:
+        raise ValueError('baseline task clock is in the future')
+    remaining = 240 - (now - started)
+    if remaining <= 0:
+        raise TimeoutError('baseline task deadline exhausted')
+    return min(240, remaining)
+
+
 def run_check(command, root, s):
     left = check_deadline(s)
     started = time.monotonic()
@@ -239,8 +260,8 @@ def begin(repo, slot, rel, a, b, check, remaining, issue='', baseline=None, cont
                       f"Handle: {s['handle']}\n\nIssue: {issue}\n\n"
                       f"Numbered view:\n{out['text']}\n\n"
                       "Use run_skill_script with skill_name semdag, file_path scripts/run.py, "
-                      "and positional_args [edit, HANDLE, REPLACEMENT]. "
-                      "All positional arguments are strings. Use positional_args [view, HANDLE, A-B] to narrow a truncated view. "
+                      "and positional_args formed from edit_prefix plus each replacement code line. "
+                      "All positional arguments are strings. Use positional_args [view, START_LINE, END_LINE] to narrow a truncated view. "
                       "Return EDIT_READY with the new handle after edit success. "
                       "Outside tests and finalization belong to the orchestrator. "
                       "Never edit central source, other slots or tests/configs.\n")

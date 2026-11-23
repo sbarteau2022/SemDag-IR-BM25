@@ -71,3 +71,12 @@ Preparations now have independent cache namespaces carried into finalization, in
 Candidates are compiled without execution before writing, catching contextual syntax such as return/break outside a valid scope that ast.parse alone accepts. Editors should narrow to a complete changed block rather than replace a whole function with only its body.
 
 Regression suite: 296 passed. The latest fixed-source benchmark still reduces modeled control steps 9→4 with identical output, but native median overhead is +15.44%, exceeding the original 10% timing gate. That performance gate is not relaxed or claimed passed; these correctness repairs remain experimental pending live evidence and further measurement.
+
+
+## Native clock and line-oriented edit API
+
+Preferred root prepare is now prepare QUERY SLOT. Native code derives a conservative four-minute deadline from the harness-created baseline commit timestamp (created before the agent loop); missing, expired or future anchors fail. The older explicit-time form remains, capped by the baseline clock when available. The outer harness still independently enforces its budget. No model clock arithmetic is required.
+
+Editors may read current assigned lines with view START END or view A-B, receiving a fresh handle. Unambiguous numeric read packets are accepted. Writes still require an explicit current handle: edit_lines HANDLE CODE_LINE... joins only the supplied line/chunk boundaries, preserving content and spaces. Actual editor status/view replies return an edit_prefix array to extend with code. Ambiguous comma-packed writes are rejected; no code splitting, inferred write fields, backslash unescaping or indentation repair is performed. Optional ranges on the legacy edit form must equal the issued view.
+
+This is a native command grammar and budget calculation, not a host rewrite of malformed SDK calls. Role/slot/hash/compile/verification checks and E4B/token limits are unchanged.
