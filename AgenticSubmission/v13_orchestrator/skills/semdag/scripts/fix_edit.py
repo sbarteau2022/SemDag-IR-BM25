@@ -294,9 +294,9 @@ def _resolve_repo_module(repo, rel, mod_name, level):
 
 
 def _collect_imports(text):
-    """Collect non-try-except imports as (lineno, module, level, name)."""
+    """Collect imports from source or an already parsed tree without reparsing it."""
     try:
-        tree = ast.parse(text)
+        tree = text if isinstance(text, ast.AST) else ast.parse(text)
     except (SyntaxError, ValueError, RecursionError):
         return []
     out = []
@@ -437,6 +437,9 @@ def _replace_lines(lines, a, b, new_text):
 # ---------------------------------------------------------------- entry
 def run(filepath, old, new, repo=None):
     repo = wsroot.workspace_root(repo)
+    import edit_tx
+    if edit_tx.managed(repo):
+        return edit_tx.legacy(filepath, old, new, repo)
     if not filepath:
         return {"ok": False, "error": "no file path", "hint": USAGE}
     try:

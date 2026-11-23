@@ -16,3 +16,21 @@ Host regressions: `PYTHONDONTWRITEBYTECODE=1 .venv-harness/bin/python -m pytest 
 Runtime testing uses Gemma E4B only under macOS Seatbelt with the official subprocess backend; no Docker. External-task grading must first reject the empty patch and accept the reference fix. See `Tools/local/qualify_v13.py` and the host run report under `reports/v13_qualification_2026-11-22/` (local artifacts).
 
 The workspace manager accepts normal argument lists and one shell-quoted packed command string. The skill manual documents its run_skill_script route; editors must not be dispatched before a successful spawn. This repairs the malformed-call failure observed in the first external E4B run.
+
+
+## Stage 1 native edit transactions (2026-11-23)
+
+`skills/semdag/scripts/edit_tx.py` combines preparation and finalization while binding edits to task/slot/file/span hashes. Prepare returns numbered code and a single-use handle; edit returns a new handle; finalize verifies an independent copy before atomic central apply, then verifies central tests and the diff. Stale, off-assignment, unknown and replayed handles are refused. Managed legacy apply uses the same finalization gate; managed range writes require an edit handle instead of trusting old coordinates.
+
+Source writes preserve supported UTF-8/BOM, LF/CRLF, final-newline state and file mode. Unsupported encodings fail unchanged. Atomic ephemeral metadata can be lost on a crash; source hashes make lost/old checkpoints fail closed. Source writes are fsynced. These are helper-path checks, not full filesystem containment: direct shell writes remain a broader capability.
+
+Use `run_skill_script` with `skill_name: semdag`, `file_path: scripts/edit_tx.py`, and `args`:
+
+- Prepare: `--prepare ISSUE --remaining SECONDS_FROM_GET_STATUS --slot 1`.
+- Edit: `--edit HANDLE --slot 1 --text REPLACEMENT`.
+- Narrow/read: `--view HANDLE --slot 1 --lines A-B`.
+- Finalize: `--finalize HANDLE --slot 1`.
+
+Always pass separate strings in `args`, with code as one string. Official required tool-envelope keys remain mandatory; no host rewrite supplies missing keys. Existing editor count/ambiguity dispatch and one-final-retry policy remain for the Stage 1 comparison; subagent policy tuning is deferred.
+
+Component timing on a fixed real retriever source/patch/check, seven alternating repetitions, reduced modeled lifecycle control operations 9 to 4 with identical final bytes. Median native time was 0.14657 s versus 0.15400 s (+5.07%), passing the preregistered <=10% regression gate. This is neither live model call reduction nor a task-resolution score. Detailed local receipts: `reports/v13_stage1_2026-11-22/`.

@@ -73,7 +73,7 @@ def _independent_copy(src, dst):
     return shutil.copy2(src, dst)
 
 
-def spawn(slot, rel, span, check_cmd="", carried="", issue="", repo=None):
+def _spawn_copy(slot, rel, span, check_cmd="", carried="", issue="", repo=None):
     repo = wsroot.workspace_root(repo)
     ws = _ws_dir(slot)
     if rel:
@@ -128,6 +128,16 @@ End your response with one line:
             "file": rel, "lines": span}
 
 
+def spawn(slot, rel, span, check_cmd="", carried="", issue="", repo=None):
+    """Legacy spawn now establishes the same managed transaction as prepare."""
+    import edit_tx
+    match = re.fullmatch(r"L?(\d+)(?:-(\d+))?", span)
+    if not match:
+        raise ValueError("invalid assignment range")
+    return edit_tx.begin(repo, slot, rel, int(match[1]), int(match[2] or match[1]),
+                         check_cmd, 180, issue)
+
+
 def _changed_files(repo, ws):
     if os.path.islink(ws):
         raise ValueError("workspace root cannot be a symlink")
@@ -178,25 +188,25 @@ def collect(slot, repo=None):
 
 
 def apply_ws(slot, repo=None):
-    repo = wsroot.workspace_root(repo)
-    ws = _ws_dir(slot)
-    if not os.path.isdir(ws):
-        return {"ok": False, "error": f"workspace {ws} not found"}
-    changed = _changed_files(repo, ws)
-    if not changed:
-        return {"ok": False, "error": f"no non-test changes in {ws}"}
-    applied = []
-    for rel, _old, new_t in changed:
-        dst = os.path.join(repo, rel)
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        with open(dst, "w", encoding="utf-8") as fh:
-            fh.write(new_t)
-        applied.append(rel)
-    return {"ok": True, "slot": str(slot), "applied_files": applied}
+    """Legacy apply cannot bypass managed outside verification."""
+    import edit_tx
+    item = edit_tx.managed(_ws_dir(slot))
+    if not item:
+        return {"ok": False, "error": "no managed transaction; prepare first"}
+    _, state = item
+    return edit_tx.finalize(state["handle"], repo, slot)
 
 
 def reset(slot):
     ws = _ws_dir(slot)
+    import edit_tx
+    item = edit_tx.managed(ws)
+    if item:
+        path, _ = item
+        with edit_tx.locked(path):
+            state = json.loads(path.read_text())
+            state["state"], state["handle"] = "failed", ""
+            edit_tx.save(path, state)
     if os.path.exists(ws):
         shutil.rmtree(ws)
     if os.path.exists(f"{ws}.patch"):

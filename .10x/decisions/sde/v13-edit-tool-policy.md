@@ -1,0 +1,2 @@
+# Stage 1 implementation
+Native edit_tx module, managed legacy routing, fused prepare/finalize, hash/scoped edits, independent verification, conditional rollback and fixed-source benchmark implemented. No persistent database/schema migration. Ephemeral atomic JSON state; actual source writes fsynced. Dispatch count/conditions and budgets retained; no host model-output correction. Comprehensive regression and E4B smoke gates are being verified.
