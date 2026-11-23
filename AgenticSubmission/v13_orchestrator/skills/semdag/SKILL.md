@@ -12,3 +12,8 @@ Root actions:
 Root cannot edit or view through editor actions. Prepare returns the numbered view and handle; pass these to the editor. Prepare slot 2 only for the existing BM25-alternative condition. Only successful finalization verifies/applies a candidate. Keep the existing one-final-retry rule.
 
 Handles bind task, slot, file, span and source version. Never reuse old handles. Wrong-role actions, stale or unknown handles and off-assignment edits fail without mutation. Required official tool-envelope keys remain mandatory. E4B and four-minute/default-token budgets are unchanged. These action checks do not prevent every premature delegation/submit or establish full host confinement.
+
+
+Exact status-call JSON (passed to the tool named run_skill_script):
+{"skill_name":"semdag","file_path":"scripts/run.py","args":["--status"]}
+Use one layer of JSON string delimiters; the values do not contain extra quote characters. args may also be a dictionary of long-option names without hyphens and their explicit values. A complete JSON string array serialized as one argument is accepted by native code; missing outer skill_name/file_path fields, quoted skill names, unknown actions and wrong roles are not repaired.

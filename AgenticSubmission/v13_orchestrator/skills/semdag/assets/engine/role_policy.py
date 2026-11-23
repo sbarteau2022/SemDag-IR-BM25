@@ -27,6 +27,13 @@ def dispatch(role, bound_slot, argv):
     parser.add_argument("--remaining", type=float)
     parser.add_argument("--text")
     parser.add_argument("--lines")
+    # Accept an explicit JSON array serialized as one argv value. No fields,
+    # actions or roles are inferred, and outer SDK arguments are not rewritten.
+    if len(argv) == 1 and argv[0].lstrip().startswith("["):
+        decoded = json.loads(argv[0])
+        if not isinstance(decoded, list) or not all(isinstance(v, str) for v in decoded):
+            raise ValueError("serialized arguments must be a JSON array of strings")
+        argv = decoded
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
@@ -42,7 +49,8 @@ def dispatch(role, bound_slot, argv):
     if action == "status":
         path = tx.state_path(repo, slot)
         if not path.exists():
-            return {"ok": False, "state": "unprepared", "slot": slot}
+            return {"ok": False, "state": "unprepared", "slot": slot,
+                    "next": "Return EDIT_FAILED: root did not prepare this slot. Do not retry or list skills."}
         state = json.loads(path.read_text())
         if state["repo"] != repo or state["slot"] != slot:
             raise ValueError("assignment identity mismatch")

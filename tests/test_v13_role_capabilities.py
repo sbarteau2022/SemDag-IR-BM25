@@ -100,6 +100,8 @@ def test_native_role_denials_through_sdk(compiled,role,args):
     result=payload(invoke(roles,role,args))
     assert not result['ok']
     assert ('PermissionError' in result['error'] or 'invalid native action' in result['error'])
+    encoded=payload(invoke(roles,role,[json.dumps(args)]))
+    assert not encoded['ok']
     assert manager.read_file('sample.py')==before
 
 
@@ -122,9 +124,19 @@ def test_official_missing_keys_remain_errors(compiled):
     assert invoke(roles,'root',['--status'],skill='dask')['error_code']=='SKILL_NOT_FOUND'
 
 
+def test_native_serialized_json_arguments_and_outer_errors(compiled):
+    _,roles=compiled
+    out=payload(invoke(roles,'editor_1',[json.dumps(['--status'])]))
+    assert out['state']=='unprepared' and not out['ok']
+    assert 'EDIT_FAILED' in out['next']
+    assert not payload(invoke(roles,'root',['[{}]']))['ok']
+    assert not payload(invoke(roles,'root',['[invalid']))['ok']
+    assert invoke(roles,'root',['--status'],skill='"semdag"')['error_code']=='SKILL_NOT_FOUND'
+
+
 def test_actual_compiled_prepare_editor_edit_finalize(compiled):
     manager,roles=compiled
-    prepared=payload(invoke(roles,'root',['--prepare','sample.value returns 1 but must return 2','--remaining','60']))
+    prepared=payload(invoke(roles,'root',{'prepare':'sample.value returns 1 but must return 2','remaining':60,'slot':'1'}))
     assert prepared['ok'],prepared
     own=payload(invoke(roles,'editor_1',['--status']))
     assert own['ok'] and own['handle']==prepared['handle'],own

@@ -1,2 +1,6 @@
 # Implementation
 Separate root/editor bundles retain canonical semdag skill name in nested directories, with static role/slot bindings in scripts/run.py. Engine dependencies moved to readable assets; only registered entry is executable. Shell tools removed. Native status canonicalizes sandbox root identity. Compiled SDK denial and legitimate editor 1/editor 2 lifecycles pass; full host/live verification in progress. No database migration.
+
+First E4B run timed out with quoted outer names/encoded argv lists and unprepared dispatch. Preserve model_run and first_smoke_summary.json. Repair manual examples to exact JSON and accept only explicit serialized JSON string arrays inside native argv; no outer SDK field repair, role inference or budget changes. Before rerun: repeat compiler denial/lifecycle tests and full suite, seal source. Rerun the same development case; require successful prepare/edit/verified apply for adoption.
+
+Second source version passed 272 host tests and official directory validation before the sealed same-task E4B rerun. Registered action sets/roles/budgets remain fixed; only exact tool examples, terminal unprepared feedback and explicit-JSON argv decoding changed. Outer invalid/quoted SDK names still fail normally.
