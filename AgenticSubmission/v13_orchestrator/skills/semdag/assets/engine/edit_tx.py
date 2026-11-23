@@ -224,7 +224,7 @@ def begin(repo, slot, rel, a, b, check, remaining, issue='', baseline=None):
                       f"Workspace: {s['workspace']}\nFile: {rel}\nSpan: {a}-{b}\n"
                       f"Handle: {s['handle']}\n\nIssue: {issue}\n\n"
                       f"Numbered view:\n{out['text']}\n\n"
-                      "Use run_skill_script with skill_name semdag, file_path scripts/edit_tx.py, "
+                      "Use run_skill_script with skill_name semdag, file_path scripts/run.py, "
                       "and args [--edit, HANDLE, --slot, SLOT, --text, REPLACEMENT]. "
                       "All args are strings. Use --view HANDLE --slot SLOT --lines A-B to narrow a truncated view. "
                       "Return EDIT_READY with the new handle after edit success. "

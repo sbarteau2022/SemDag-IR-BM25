@@ -36,3 +36,16 @@ Always pass separate strings in `args`, with code as one string. Official requir
 Component timing on a fixed real retriever source/patch/check, seven alternating repetitions, reduced modeled lifecycle control operations 9 to 4 with identical final bytes. Median native time was 0.142612 s versus 0.149561 s (+4.87%), passing the preregistered <=10% regression gate. This is neither live model call reduction nor a task-resolution score. Detailed local receipts: `reports/v13_stage1_2026-11-22/`.
 
 Final Stage 1 component source: 247 full host tests passed; modeled control operations 9→4, identical output, native median 0.142612→0.149561 s (+4.87%). Live E4B smoke: 0/1 resolved, 104.39 s, empty patch, no managed edit/apply or editor dispatch. The root bypassed native flow through shell commands. This candidate is experimental; no task-quality promotion. [Stage 1 report](../../docs/runs/v13_STAGE1_2026-11-23.md) and [proposed role policy](../../.10x/specs/2026-11-23-v13-role-capability-policy.md).
+
+
+## Role-bound action policy (2026-11-23)
+
+Root and both editors no longer receive `run_command`, raw edit/write/read tools, or executable implementation helper scripts. Each agent loads a separate `semdag` skill from a directory whose basename matches that canonical name:
+
+- Root: `skills/semdag`, entry `scripts/run.py`, native actions prepare/finalize/status.
+- Editor 1: `skills/editor_1/semdag`, same entry path, actions view/edit/status bound to slot 1.
+- Editor 2: `skills/editor_2/semdag`, same entry path, actions view/edit/status bound to slot 2.
+
+Static entry bindings cannot be changed by user flags. Dependencies are readable `assets/engine/*.py`; SDK script lookup exposes only `run.py`. Use `Tools/local/sync_v13_role_assets.py --check` to detect dependency drift, or run it without --check after editing the canonical root engine. Actual compiled-toolset subprocess tests cover wrong-role calls, cross-slot access, helper/asset/traversal execution denial, missing official keys and legitimate prepare/edit/finalize with both editors. Symlinked sandbox paths are canonicalized before assignment identity comparison.
+
+This restricts registered action surfaces; it does not stop every unprepared agent_tool dispatch or empty submit, make patched library code safe to execute, or provide full host filesystem confinement. E4B, four-minute/default-token budgets and dispatch count/ambiguity/retry rules remain unchanged. No numeric editor timing thresholds have been chosen.

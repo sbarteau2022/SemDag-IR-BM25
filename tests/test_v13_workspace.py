@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "AgenticSubmission/v13_orchestrator/skills/semdag/scripts"
+SCRIPTS = Path(__file__).resolve().parents[1] / "AgenticSubmission/v13_orchestrator/skills/semdag/assets/engine"
 
 @pytest.fixture
 def wm(tmp_path, monkeypatch):

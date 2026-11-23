@@ -15,7 +15,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'reports/v13_stage1_2026-11-22/baseline/skills/semdag/scripts'
-CANDIDATE = ROOT / 'AgenticSubmission/v13_orchestrator/skills/semdag/scripts'
+CANDIDATE = ROOT / 'AgenticSubmission/v13_orchestrator/skills/semdag/assets/engine'
 CHECK = 'python -c \'import retriever; assert retriever.tokens("CamelCase") == ["camelcase", "camel", "case"]\''
 
 

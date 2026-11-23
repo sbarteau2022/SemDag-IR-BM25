@@ -1,0 +1,2 @@
+# Implementation
+Separate root/editor bundles retain canonical semdag skill name in nested directories, with static role/slot bindings in scripts/run.py. Engine dependencies moved to readable assets; only registered entry is executable. Shell tools removed. Native status canonicalizes sandbox root identity. Compiled SDK denial and legitimate editor 1/editor 2 lifecycles pass; full host/live verification in progress. No database migration.

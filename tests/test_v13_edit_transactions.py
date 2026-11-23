@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[1] / 'AgenticSubmission/v13_orchestrator/skills/semdag/scripts'
+SCRIPTS = Path(__file__).resolve().parents[1] / 'AgenticSubmission/v13_orchestrator/skills/semdag/assets/engine'
 NAMES = ['edit_tx', 'workspace_mgr', 'fix_edit', 'wsroot', 'impact', 'cache', 'snapshot',
          'semdag_ir_ast', 'retriever', 'vulnwalk', 'flow', 'task_ir', 'repo_eval']
 
