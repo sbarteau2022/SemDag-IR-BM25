@@ -1,2 +1,2 @@
 # Handoff
-Read docs/runs/v13_ROLE_POLICY_2026-11-23.md. Registered role surfaces and native lifecycle verified; live SDK tool protocol remains blocking quality gate. No successful editor timing exists, so do not tune numeric dispatch thresholds. E4B only, no Docker, fixed budgets, no public-task tuning. All failures retained locally.
+Read specs/2026-11-23-v13-tool-protocol-diagnosis.md. Determine model-vs-parser source of malformed fields. Preserve raw output; no inference of missing SDK fields or model-output cleanup. E4B only/no Docker/fixed budgets.
