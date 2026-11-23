@@ -1,2 +1,2 @@
 # Handoff
-Read ADR-001 and v13 spec including next-round hypothesis. External Dask grading is qualified (empty: 2 fail/43 pass; reference: 45 pass). Preserve first-run trace and code hashes. Await round2 completion and host suite before task-quality claims.
+Resume from docs/runs/v13_QUALIFICATION_2026-11-22.md. Current scope v13 only, E4B only, no Docker. Isolated-copy/argument fixes verified; malformed model tool calls and timeout remain. Preserve raw reports and frozen v6. Next intervention needs a design based on these traces; do not mark performance improved.

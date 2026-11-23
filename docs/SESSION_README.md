@@ -80,3 +80,8 @@ Known local defects: the arm64 sandbox image breaks all 67 fastapi tasks (pydant
 2. `git log --oneline -10` and `git status`: the folder is the source of truth, GitHub is behind.
 3. Check `docs/runs/` for the newest `run_*_RESULTS.md` before proposing work.
 4. At the end of a session, update the "Where we are" table here and add a dated line to MEMORY.md.
+
+
+## 2026-11-22: v13 qualification
+
+Current candidate tested: v13_orchestrator, Gemma E4B only, macOS Seatbelt plus official subprocess backend, no Docker evaluation. Repaired hardlink workspace aliasing, subprocess slot-path resolution, editor budgets and packed workspace arguments/skill documentation. Host suite: 217 passed. External Dask grading: empty 2 fail/43 pass, reference 45 pass. Two valid same-task development runs both unresolved with empty patches; second times out at 241.44 s. An intervening authentication failure is excluded. No task-resolution gain established and no candidate promotion. Details: [v13 qualification](runs/v13_QUALIFICATION_2026-11-22.md). Next: design around malformed E4B tool calls and budget use, preserving the four-minute/default-token rules.
