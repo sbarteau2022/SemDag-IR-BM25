@@ -1,0 +1,2 @@
+# Role-policy review
+Static root/editor action and slot bindings are checked before mutation. Only run.py registered; helpers moved to readable assets. Compiled SDK lookup/denial and both editor lifecycles verified including symlinked paths and serialized argv denials. No host outer-field repair. Not full filesystem or arbitrary candidate-code confinement; unprepared delegation/submit still callable.

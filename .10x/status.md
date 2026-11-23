@@ -1,2 +1,2 @@
 # Status
-Role-capability implementation complete. Actual SDK/subprocess role denials and both editor lifecycles pass; full suite, official validation and E4B smoke being qualified. No dispatch/budget tuning or performance promotion.
+Role-capability implementation and component verification complete: 272 tests and official validation pass. Live policy adoption NOT achieved: both E4B trials unresolved with empty patches, no prepare/edit/apply lifecycle. No performance promotion. Frozen v6 preserved.

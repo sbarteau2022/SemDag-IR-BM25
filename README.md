@@ -3,7 +3,7 @@
 This repository is a solo entry in Kaggle's *Gemma 4 Developer Agent* competition. A 4B-parameter model, `gemma-4-e4b-it-qat-w4a16-ct`, has to resolve real GitHub issues inside a sandbox with a 4-minute budget per task. The work has two parts:
 
 1. **SemDAG**, a typed graph IR of a Python repository plus a BM25-seeded walk. It ranks the functions an issue most likely touches. It is evaluated in a paper with a controlled retrieval study.
-2. **An agent line** (v0 to v9), packaged as offline ADK submissions. Each version is a separate, zippable folder, measured end to end on held-out tasks.
+2. **An agent line** (v0 to v13), packaged as offline ADK submissions. Each version is a separate, zippable folder, measured end to end on held-out tasks.
 
 The paper is **[SemDAG: A Controlled Evaluation of Lexical and Graph Retrieval for Code Agents](PaperTrack/Paper_SemDAG.pdf)** ([LaTeX](PaperTrack/Paper_SemDAG.tex)).
 
@@ -99,3 +99,5 @@ The v13 live diagnostic runs both remained unresolved with empty patches; the re
 Final Stage 1 result: 247 host tests pass; native component gate passes (9→4 modeled control operations, +4.87% median native overhead, identical output). E4B live adoption failed: no managed edits, no editor dispatch and an empty patch. Candidate remains experimental. See [Stage 1 findings](docs/runs/v13_STAGE1_2026-11-23.md).
 
 The experimental v13 role-capability policy removes generic shell tools and registers one native entry per role. Root can prepare/finalize/status; editors can view/edit/status only in their fixed slot. Engine dependencies remain readable assets. SDK-level denial and successful-lifecycle integration tests precede live qualification; no competition-quality promotion is implied.
+
+Role-policy result: 272 host tests and actual SDK role/lifecycle fixtures pass. Both E4B development trials remained unresolved with empty patches; native tool protocol is still an unmet live gate. No promotion is established. See [role-policy findings](docs/runs/v13_ROLE_POLICY_2026-11-23.md).

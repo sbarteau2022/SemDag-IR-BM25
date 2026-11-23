@@ -1,2 +1,2 @@
 # Handoff
-Follow ADR-003 and role-capability spec. Verify bundle/compiler separation and actual SDK denial behavior before E4B smoke. Frozen v6 and Stage 1 baseline preserved.
+Read docs/runs/v13_ROLE_POLICY_2026-11-23.md. Registered role surfaces and native lifecycle verified; live SDK tool protocol remains blocking quality gate. No successful editor timing exists, so do not tune numeric dispatch thresholds. E4B only, no Docker, fixed budgets, no public-task tuning. All failures retained locally.
