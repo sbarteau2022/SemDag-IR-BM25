@@ -85,3 +85,7 @@ Known local defects: the arm64 sandbox image breaks all 67 fastapi tasks (pydant
 ## 2026-11-22: v13 qualification
 
 Current candidate tested: v13_orchestrator, Gemma E4B only, macOS Seatbelt plus official subprocess backend, no Docker evaluation. Repaired hardlink workspace aliasing, subprocess slot-path resolution, editor budgets and packed workspace arguments/skill documentation. Host suite: 217 passed. External Dask grading: empty 2 fail/43 pass, reference 45 pass. Two valid same-task development runs both unresolved with empty patches; second times out at 241.44 s. An intervening authentication failure is excluded. No task-resolution gain established and no candidate promotion. Details: [v13 qualification](runs/v13_QUALIFICATION_2026-11-22.md). Next: design around malformed E4B tool calls and budget use, preserving the four-minute/default-token rules.
+
+## v13 edit/tool design awaiting approval (2026-11-22)
+
+New real-source component probes reproduced off-assignment editing, unverified stale central overwrite, and an accepted stale-coordinate edit inserting a duplicate assignment. No implementation changed. Proposed native edit transactions and fused lifecycle calls first, then a separate subagent-policy experiment after successful-edit timing exists. Design: [.10x spec](../.10x/specs/2026-11-22-v13-edit-tool-policy.md). Local receipts: reports/v13_edit_policy_design_2026-11-22/.
