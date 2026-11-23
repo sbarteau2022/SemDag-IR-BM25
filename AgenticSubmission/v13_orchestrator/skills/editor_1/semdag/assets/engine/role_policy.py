@@ -157,5 +157,14 @@ def main(role, bound_slot=None, argv=None):
     if role == "editor" and out.get("ok") and out.get("handle"):
         out["edit_prefix"]=["edit_lines",out["handle"]]
         out["edit_contract"]="Append replacement code as separate array elements, preserving spaces; never pack commas. Use the new handle after view."
-    print(json.dumps(out,ensure_ascii=False,separators=(",",":")))
+    header = dict(out)
+    source = header.pop("text", None) if header.get("ok") and header.get("handle") else None
+    if source is not None:
+        header["source_format"] = "numbered-python-v1"
+    stream = sys.stdout if header.get("ok") else sys.stderr
+    print(json.dumps(header,ensure_ascii=True,separators=(",",":")),file=stream)
+    if source is not None:
+        print("---BEGIN V13 SOURCE---",file=stream)
+        print(source,file=stream)
+        print("---END V13 SOURCE---",file=stream)
     return out

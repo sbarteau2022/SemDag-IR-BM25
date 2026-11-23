@@ -287,3 +287,16 @@ def test_baseline_clock_is_conservative_and_expired_future_missing_fail(modules,
     with pytest.raises(ValueError,match='future'):tx.task_remaining(repo)
     empty=tmp_path/'no-clock';empty.mkdir()
     with pytest.raises(tx.BudgetAnchorUnavailable):tx.task_remaining(empty)
+
+
+def test_unicode_separators_are_not_python_source_line_boundaries(modules,repo):
+    tx,wm=modules
+    original='def value():\n    return "a\u2028b\u2029c"\n'
+    (repo/'sample.py').write_text(original)
+    h=tx.begin(str(repo),'1','sample.py',2,2,'true',30)['handle']
+    view=tx.view_result(tx.load_handle(h,str(repo),'1')[1])
+    assert view['text']=='2:     return "a\u2028b\u2029c"'
+    out=tx.edit(h,'    return "x\u2028y\u2029z"',str(repo),'1')
+    assert out['ok']
+    assert (Path(wm._ws_dir('1'))/'sample.py').read_text()=='def value():\n    return "x\u2028y\u2029z"\n'
+    assert tx.finalize(out['handle'],str(repo),'1')['ok']

@@ -67,8 +67,22 @@ def invoke(roles,role,args,file_path='scripts/run.py',skill='semdag',raw=None):
 
 
 def payload(out):
-    assert out.get('stdout'),out
-    return json.loads(out['stdout'].splitlines()[-1])
+    for value in [out.get('stdout',''),out.get('stderr','')]:
+        lines=value.split("\n")
+        for index,line in enumerate(lines):
+            if not line.startswith('{'):
+                continue
+            try:
+                header=json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(header,dict) and 'ok' in header:
+                if header.get('source_format')=='numbered-python-v1':
+                    assert lines[index+1]=='---BEGIN V13 SOURCE---'
+                    end=lines.index('---END V13 SOURCE---',index+2)
+                    header['text']='\n'.join(lines[index+2:end])
+                return header
+    raise AssertionError(out)
 
 
 def test_compiled_roles_have_no_shell_or_raw_edit_tools(compiled):
@@ -215,14 +229,25 @@ def test_native_contextual_forms_fail_safely(compiled,role,values):
     assert manager.read_file('sample.py')==before
 
 
+def test_native_errors_have_sdk_error_status_and_stderr(compiled):
+    _,roles=compiled
+    out=positional(roles,'root',['edit_lines','unknown','pass'])
+    assert out['status']=='error' and not out['stdout']
+    assert 'PermissionError' in out['stderr'] and not payload(out)['ok']
+
+
 def test_actual_sdk_positional_lifecycle(compiled):
     manager,roles=compiled
-    manager.write_file('sample.py','def value():\n    return 10\n')
+    manager.write_file('sample.py','def value():\n    return "quoted"\n')
     for command in ['git add sample.py','git commit -qm positional-base','git tag -f _swegemma_baseline']:
         assert manager.run_command(command).exit_code==0
     prepared=payload(positional(roles,'root',['prepare','sample.value returns 10 but must return 11','1']))
     assert prepared['ok'] and 'baseline' in prepared['budget_source'],prepared
-    own=payload(positional(roles,'editor_1',['view,2,2']));assert own['ok'],own
+    raw=positional(roles,'editor_1',['view,2,2']);own=payload(raw);assert own['ok'],own
+    assert own['source_format']=='numbered-python-v1'
+    assert '2:     return "quoted"' in raw['stdout']
+    assert r'\"quoted\"' not in raw['stdout']
+    assert r'\n' not in raw['stdout'].split('---BEGIN V13 SOURCE---',1)[1]
     assert own['edit_prefix']==['edit_lines',own['handle']]
     edited=payload(positional(roles,'editor_1',own['edit_prefix']+['    result = 11','    return result']))
     assert edited['ok'],edited

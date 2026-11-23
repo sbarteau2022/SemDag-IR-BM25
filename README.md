@@ -107,3 +107,5 @@ The v13 protocol investigation adds a compatible native grammar for the SDK’s 
 Recent v13 live execution exposed assignment/cache and compilation-context defects; repairs isolate per-assignment verification and preserve unchanged-candidate reassignment. 296 host tests pass. The newer source exceeds the native microbenchmark overhead gate (+15.44%); no performance promotion is claimed. Live workflow verification remains separate.
 
 v13’s native controller now owns conservative task-clock calculation and accepts explicit line-array edits, removing model-side clock copying and ambiguous write packets. Live workflow evidence remains the qualification gate; failed trials and the native overhead-gate failure are retained.
+
+v13 source views now use a metadata header plus raw numbered Python, avoiding nested JSON source escaping. Native failures return nonzero/error status. This remains experimental until the unchanged-task E4B workflow and grader demonstrate success.

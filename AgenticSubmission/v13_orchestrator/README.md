@@ -80,3 +80,10 @@ Preferred root prepare is now prepare QUERY SLOT. Native code derives a conserva
 Editors may read current assigned lines with view START END or view A-B, receiving a fresh handle. Unambiguous numeric read packets are accepted. Writes still require an explicit current handle: edit_lines HANDLE CODE_LINE... joins only the supplied line/chunk boundaries, preserving content and spaces. Actual editor status/view replies return an edit_prefix array to extend with code. Ambiguous comma-packed writes are rejected; no code splitting, inferred write fields, backslash unescaping or indentation repair is performed. Optional ranges on the legacy edit form must equal the issued view.
 
 This is a native command grammar and budget calculation, not a host rewrite of malformed SDK calls. Role/slot/hash/compile/verification checks and E4B/token limits are unchanged.
+
+
+## Source response framing and error status
+
+Role entry responses now begin with a one-line JSON metadata header. When a view is present, raw numbered Python source follows between BEGIN/END V13 SOURCE markers instead of being embedded as a JSON text string inside SDK JSON stdout. This removes an avoidable escaping layer without decoding or repairing generated code. Root delegates intent/slot; editors always read authoritative native status/view before editing. Python physical line slicing uses LF so Unicode separators inside string literals remain content.
+
+Native CLI failure exits nonzero and emits structured metadata on stderr, so the SDK labels failure as error instead of success. Successful views use stdout. Metadata is ASCII-escaped JSON for a stable one-line header; raw source stays UTF-8. Internal transaction dictionaries remain compatible for host callers. SDK/model output and required outer fields are not rewritten.

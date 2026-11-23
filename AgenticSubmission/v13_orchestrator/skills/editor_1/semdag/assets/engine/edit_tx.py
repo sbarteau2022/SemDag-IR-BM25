@@ -112,6 +112,12 @@ def file_at(root, rel):
     return Path(wm._safe_path(root, rel))
 
 
+def physical_lines(text):
+    """CPython source line positions use LF, not every Unicode separator."""
+    lines = text.split("\n")
+    return lines[:-1] if lines[-1] == "" else lines
+
+
 def decode(data):
     enc = tokenize.detect_encoding(io.BytesIO(data).readline)[0]
     if enc not in ('utf-8', 'utf-8-sig'):
@@ -167,7 +173,7 @@ def view_result(s):
     data = file_at(s['workspace'], s['file']).read_bytes()
     text, _enc, _eol = decode(data)
     a, b = s['view']
-    shown = '\n'.join(f'{i}: {line}' for i, line in enumerate(text.splitlines()[a-1:b], a))
+    shown = '\n'.join(f'{i}: {line}' for i, line in enumerate(physical_lines(text)[a-1:b], a))
     return {'ok': True, 'slot': s['slot'], 'handle': s['handle'], 'generation': s['generation'],
             'file': s['file'], 'lines': f'{a}-{b}', 'text': shown[:6000],
             'text_truncated': len(shown) > 6000, 'baseline': s.get('baseline'),
@@ -230,7 +236,7 @@ def begin(repo, slot, rel, a, b, check, remaining, issue='', baseline=None, cont
         raise ValueError('only assigned, unprotected Python source is editable')
     source = path.read_bytes()
     text, _enc, _eol = decode(source)
-    if not 1 <= a <= b <= len(text.splitlines()):
+    if not 1 <= a <= b <= len(physical_lines(text)):
         raise ValueError('assignment range outside source')
     if not check.strip():
         raise ValueError('verification command required')
@@ -331,8 +337,8 @@ def edit(handle, replacement, repo=None, slot=None):
             raise ValueError('deleted view has no further editable lines; finalize or prepare again')
         if view_result(s)['text_truncated']:
             raise ValueError('view is truncated; request a smaller --view before editing')
-        lines = text.splitlines()
-        block = replacement.replace('\r\n', '\n').splitlines()
+        lines = physical_lines(text)
+        block = physical_lines(replacement.replace('\r\n', '\n'))
         candidate = '\n'.join(lines[:a-1] + block + lines[b:]) + ('\n' if text.endswith('\n') else '')
         if candidate == text:
             raise ValueError('no change')
@@ -426,9 +432,9 @@ def finalize(handle, repo=None, slot=None):
         old_text, _, _ = decode(before)
         new_text, _, _ = decode(candidate)
         a, b = s['allowed'][0], s['allowed'][1]
-        original_b = b - (len(new_text.splitlines()) - len(old_text.splitlines()))
-        if (old_text.splitlines()[:a-1] != new_text.splitlines()[:a-1]
-                or old_text.splitlines()[original_b:] != new_text.splitlines()[b:]):
+        original_b = b - (len(physical_lines(new_text)) - len(physical_lines(old_text)))
+        if (physical_lines(old_text)[:a-1] != physical_lines(new_text)[:a-1]
+                or physical_lines(old_text)[original_b:] != physical_lines(new_text)[b:]):
             raise ValueError('candidate changes outside assigned span')
         with tempfile.TemporaryDirectory(prefix='v13-verify-') as verify:
             # Test current central tree with only this candidate overlaid, not editor-provided tests.
