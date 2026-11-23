@@ -1,2 +1,4 @@
 # Stage 1 implementation
 Native edit_tx module, managed legacy routing, fused prepare/finalize, hash/scoped edits, independent verification, conditional rollback and fixed-source benchmark implemented. No persistent database/schema migration. Ephemeral atomic JSON state; actual source writes fsynced. Dispatch count/conditions and budgets retained; no host model-output correction. Comprehensive regression and E4B smoke gates are being verified.
+
+Adversarial follow-up: a persistent managed-slot marker makes missing transaction metadata fail closed even through the legacy reader/editor path. Both missing and old metadata checkpoints are regression-tested. Final host suite: 246 passed. Final-source timing: old 0.14261 s, candidate 0.14956 s (+4.87%), 9 versus 4 modeled control ops, identical bytes. E4B smoke remains in progress.

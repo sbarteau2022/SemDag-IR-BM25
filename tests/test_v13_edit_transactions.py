@@ -190,3 +190,5 @@ def test_crash_lost_metadata_fails_closed(modules,repo,loss):
         if loss=='missing':tx.finalize(current,str(repo),'1')
         else:tx.edit(h,'    return 3',str(repo),'1')
     assert (repo/'sample.py').read_bytes()==before
+    fe=importlib.import_module('fix_edit')
+    with pytest.raises(ValueError):fe.run('sample.py','L2-2','    return 3',repo=wm._ws_dir('1'))

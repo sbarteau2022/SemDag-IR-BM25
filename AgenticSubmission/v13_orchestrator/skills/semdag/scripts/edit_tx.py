@@ -71,6 +71,8 @@ def managed(repo):
         s = json.loads(p.read_text())
         if s['workspace'] == root:
             return p, s
+    if (Path(root) / '.v13-managed').exists():
+        raise ValueError('managed slot metadata missing; prepare a fresh slot')
     return None
 
 
@@ -124,7 +126,7 @@ def tree(root):
             if os.path.islink(os.path.join(current, n)):
                 raise ValueError('symlink in managed workspace')
         for n in names:
-            if n in ignored or n == 'Agents.md':
+            if n in ignored or n in ('Agents.md', '.v13-managed'):
                 continue
             p = Path(current) / n
             out[str(p.relative_to(root))] = digest(p.read_bytes())
@@ -214,6 +216,8 @@ def begin(repo, slot, rel, a, b, check, remaining, issue='', baseline=None):
              'state': 'prepared', 'check': check, 'deadline': deadline, 'baseline': baseline}
         if tree(repo) != original_tree or tree(s['workspace']) != original_tree:
             raise ValueError('source changed during workspace creation')
+        check_deadline(s)
+        (Path(s['workspace']) / '.v13-managed').write_text('managed\n')
         out = issue_handle(p, s)
         # A managed assignment must not retain the legacy edit/check instructions.
         assignment = (f"# Managed editor assignment: slot {slot}\n\n"
