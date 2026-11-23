@@ -51,3 +51,14 @@ Static entry bindings cannot be changed by user flags. Dependencies are readable
 This restricts registered action surfaces; it does not stop every unprepared agent_tool dispatch or empty submit, make patched library code safe to execute, or provide full host filesystem confinement. E4B, four-minute/default-token budgets and dispatch count/ambiguity/retry rules remain unchanged. No numeric editor timing thresholds have been chosen.
 
 Final role-policy verification: 272 full host tests and official validation pass, including actual SDK denied calls and successful lifecycles for both editor roles. Live E4B trials remain 0/1 each with empty patches (241.58 s timeout and 84.82 s failed grading). No successful native preparation/edit/apply in those live runs; no task-quality promotion or timing-threshold tuning. See [role-policy report](../../docs/runs/v13_ROLE_POLICY_2026-11-23.md).
+
+
+## Typed SDK argument ABI and protocol diagnosis (2026-11-23)
+
+Native role entries now also accept the SDK's existing `positional_args` string-array field. The SDK inserts `--`; native code parses the explicit action/data production without inventing missing values. Forms are prepare ISSUE SECONDS SLOT, edit HANDLE CODE, view HANDLE A-B, finalize HANDLE SLOT and status [SLOT]. Legacy flag grammar remains supported. Do not mix args/short_options with this preferred ABI; required outer skill_name/file_path still must be correct.
+
+Read-only probes found that the local CT and MLX templates match, and args.anyOf renders an empty native type while positional_args renders array/string. Both simple raw/chat probes pass. A captured full-context raw replay nevertheless generates the nonexistent dask skill; greedy replay does too. Thus the parser is not proven to be the cause of semantic routing errors. No SDK/template patch or model-output cleanup was added.
+
+Discovery policy now aligns with the SDK's appended model-facing MUST-load instruction: root lists the registered skill inventory, loads its returned name, then budgets and prepares. Editors load their role skill. This is an instruction/lifecycle alignment, not a claim that the SDK enforces load-before-execute. Unprepared native status now gives root a prepare instruction and editors an EDIT_FAILED instruction.
+
+Exact request capture is optional host-only telemetry, mode 0600, bodies only/no headers; task/model bodies stay local. Only verified public parser/template research was ingested into the host Edge store, never task/code/model artifacts. Source manifests and raw receipts are under reports/v13_protocol_2026-11-23/.

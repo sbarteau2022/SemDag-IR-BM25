@@ -21,16 +21,21 @@ def post(path,body):
 
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--out',type=Path,required=True);args=ap.parse_args();args.out.mkdir(parents=True,exist_ok=True)
+    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--out',type=Path,required=True);ap.add_argument('--case',choices=['json','native','typed']);args=ap.parse_args();args.out.mkdir(parents=True,exist_ok=True)
     tool=json.loads((args.out.parent/'sdk_tool.json').read_text())
     expected={'skill_name':'semdag','file_path':'scripts/run.py','args':['--status']}
     guidance={
       'json':'Call run_skill_script once to query native status. Exact JSON arguments: '+json.dumps(expected)+'. Do not execute anything else.',
+      'typed':'Call run_skill_script once to query native status. Use skill_name semdag, file_path scripts/run.py, and positional_args as the one-element string array containing status. Native argument form: skill_name:<|"|>semdag<|"|>,file_path:<|"|>scripts/run.py<|"|>,positional_args:[<|"|>status<|"|>]. Do not execute anything else.',
       'native':'Call run_skill_script once to query native status. Use the Gemma4 native call syntax: call:run_skill_script{skill_name:<|"|>semdag<|"|>,file_path:<|"|>scripts/run.py<|"|>,args:[<|"|>--status<|"|>]} . The native string delimiter already quotes values; do not insert JSON double quotes into them. Do not execute anything else.',
     }
     from vllm.parser.gemma4 import _parse_gemma4_args
     receipts={}
     for label,system in guidance.items():
+        if args.case and label != args.case:
+            continue
+        expected = ({'skill_name':'semdag','file_path':'scripts/run.py','positional_args':['status']} if label=='typed'
+                    else {'skill_name':'semdag','file_path':'scripts/run.py','args':['--status']})
         messages=[{'role':'system','content':system},{'role':'user','content':'Query the native status using the provided tool.'}]
         tokenize={'model':MODEL,'messages':messages,'tools':[tool],'add_generation_prompt':True,'chat_template_kwargs':{'enable_thinking':False},'return_token_strs':True}
         rendered,_=post('/tokenize',tokenize)

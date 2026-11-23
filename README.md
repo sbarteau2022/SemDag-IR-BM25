@@ -101,3 +101,5 @@ Final Stage 1 result: 247 host tests pass; native component gate passes (9→4 m
 The experimental v13 role-capability policy removes generic shell tools and registers one native entry per role. Root can prepare/finalize/status; editors can view/edit/status only in their fixed slot. Engine dependencies remain readable assets. SDK-level denial and successful-lifecycle integration tests precede live qualification; no competition-quality promotion is implied.
 
 Role-policy result: 272 host tests and actual SDK role/lifecycle fixtures pass. Both E4B development trials remained unresolved with empty patches; native tool protocol is still an unmet live gate. No promotion is established. See [role-policy findings](docs/runs/v13_ROLE_POLICY_2026-11-23.md).
+
+The v13 protocol investigation adds a compatible native grammar for the SDK’s concretely typed positional_args field and aligns skill discovery/loading with SDK instructions. Simple raw/chat probes pass; full-context generation still exhibits wrong-skill routing. Live milestone results remain separate from component proof.

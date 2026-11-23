@@ -134,6 +134,13 @@ def test_native_serialized_json_arguments_and_outer_errors(compiled):
     assert invoke(roles,'root',['--status'],skill='"semdag"')['error_code']=='SKILL_NOT_FOUND'
 
 
+def test_root_unprepared_status_requests_prepare_not_editor_failure(compiled):
+    _,roles=compiled
+    out=payload(invoke(roles,'root',['--status']))
+    assert not out['ok'] and out['state']=='unprepared'
+    assert 'Prepare this slot' in out['next'] and 'EDIT_FAILED' not in out['next']
+
+
 def test_actual_compiled_prepare_editor_edit_finalize(compiled):
     manager,roles=compiled
     prepared=payload(invoke(roles,'root',{'prepare':'sample.value returns 1 but must return 2','remaining':60,'slot':'1'}))
@@ -166,6 +173,49 @@ def test_compiled_editor_two_uses_its_own_alternative(compiled):
     applied=payload(invoke(roles,'root',['--finalize',edited['handle'],'--slot','2']))
     assert applied['ok'],applied
     assert 'return 4' in manager.read_file('sample.py')
+
+
+def positional(roles,role,values):
+    return invoke(roles,role,[],raw={'skill_name':'semdag','file_path':'scripts/run.py','positional_args':values})
+
+
+@pytest.mark.parametrize('role,values',[
+    ('root',['edit','unknown','x=1']),('root',['view','unknown','1-2']),
+    ('editor_1',['prepare','issue','60','1']),('editor_2',['finalize','unknown','2']),
+    ('editor_1',['status','2']),('editor_2',['status','1']),
+    ('root',['prepare','issue','60']),('root',['prepare','issue','nan','1']),
+    ('root',['prepare','issue','60','../1']),('root',['status','1','extra']),
+])
+def test_typed_positional_denials(compiled,role,values):
+    manager,roles=compiled;before=manager.read_file('sample.py')
+    out=payload(positional(roles,role,values));assert not out['ok'],out
+    assert manager.read_file('sample.py')==before
+
+
+def test_declared_positional_schema_and_no_mixed_array_arguments(compiled):
+    _,roles=compiled
+    tools=asyncio.run(toolset(roles['root']).get_tools())
+    tool=next(t for t in tools if t.name=='run_skill_script')
+    schema=tool._get_declaration().parameters_json_schema['properties']
+    assert schema['positional_args']['type']=='array'
+    assert schema['positional_args']['items']['type']=='string'
+    out=invoke(roles,'root',[],raw={'skill_name':'semdag','file_path':'scripts/run.py','args':['--status'],'positional_args':['status']})
+    assert out['error_code']=='INVALID_ARGUMENTS'
+
+
+def test_actual_sdk_positional_lifecycle(compiled):
+    manager,roles=compiled
+    manager.write_file('sample.py','def value():\n    return 10\n')
+    for command in ['git add sample.py','git commit -qm positional-base','git tag -f _swegemma_baseline']:
+        assert manager.run_command(command).exit_code==0
+    prepared=payload(positional(roles,'root',['prepare','sample.value returns 10 but must return 11','60','1']))
+    assert prepared['ok'],prepared
+    own=payload(positional(roles,'editor_1',['status']));assert own['ok'],own
+    edited=payload(positional(roles,'editor_1',['edit',own['handle'],'def value():\n    return 11']))
+    assert edited['ok'],edited
+    applied=payload(positional(roles,'root',['finalize',edited['handle'],'1']))
+    assert applied['ok'] and applied['state']=='applied',applied
+    assert manager.read_file('sample.py')=='def value():\n    return 11\n'
 
 
 def test_role_engines_are_identical_and_only_entries_differ():

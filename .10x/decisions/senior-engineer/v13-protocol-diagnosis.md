@@ -1,2 +1,4 @@
 # Protocol diagnosis
 ADR-004 governs read-only local request capture and raw/chat/parser probes. No scored-runtime changes or hidden model-output repair. Fixed-call probes pass; full context still needed. Public parser/template text was verified and ingested locally; task/model content is not ingested or published.
+
+ADR-005 adds strict typed positional grammar, with the same roles/actions and backward-compatible flags; actual SDK fixtures and full tests pass. ADR-006 aligns model-facing discovery with the SDK instruction and fixes role-aware unprepared status feedback. No SDK load-precondition enforcement claim. Greedy probes do not repair wrong-skill routing, so sampling unchanged. Short-case original reference grading fails and is excluded. Final same-case live SDK-aligned trial follows the sealed source.

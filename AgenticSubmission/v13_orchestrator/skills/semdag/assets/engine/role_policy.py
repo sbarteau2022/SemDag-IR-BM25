@@ -34,10 +34,35 @@ def dispatch(role, bound_slot, argv):
         if not isinstance(decoded, list) or not all(isinstance(v, str) for v in decoded):
             raise ValueError("serialized arguments must be a JSON array of strings")
         argv = decoded
-    try:
-        args = parser.parse_args(argv)
-    except SystemExit as exc:
-        raise ValueError("invalid native action arguments") from exc
+    if argv and argv[0] == "--":
+        # This delimiter is inserted by the unmodified SDK for positional_args.
+        values = argv[1:]
+        if not values:
+            raise ValueError("native action required")
+        action = values[0]
+        arities = {"prepare": (4,), "edit": (3,), "view": (3,), "finalize": (3,), "status": (1, 2)}
+        if action not in arities or len(values) not in arities[action]:
+            raise ValueError("invalid native positional action or field count")
+        fields = dict(prepare=None, finalize=None, view=None, edit=None, status=False,
+                      slot=None, remaining=None, text=None, lines=None)
+        if action == "prepare":
+            fields.update(prepare=values[1], remaining=float(values[2]), slot=values[3])
+        elif action == "edit":
+            fields.update(edit=values[1], text=values[2])
+        elif action == "view":
+            fields.update(view=values[1], lines=values[2])
+        elif action == "finalize":
+            fields.update(finalize=values[1], slot=values[2])
+        else:
+            fields.update(status=True, slot=values[1] if len(values) == 2 else None)
+        args = argparse.Namespace(**fields)
+        if args.slot is not None and args.slot not in ("1", "2"):
+            raise ValueError("invalid native slot")
+    else:
+        try:
+            args = parser.parse_args(argv)
+        except SystemExit as exc:
+            raise ValueError("invalid native action arguments") from exc
     action = next(k for k in ("prepare", "finalize", "view", "edit", "status")
                   if getattr(args, k) is not None and getattr(args, k) is not False)
     if action not in CAPABILITIES[role]:
@@ -50,7 +75,8 @@ def dispatch(role, bound_slot, argv):
         path = tx.state_path(repo, slot)
         if not path.exists():
             return {"ok": False, "state": "unprepared", "slot": slot,
-                    "next": "Return EDIT_FAILED: root did not prepare this slot. Do not retry or list skills."}
+                    "next": ("Prepare this slot with the issue and remaining budget before dispatching an editor." if role == "root" else
+                             "Return EDIT_FAILED: root did not prepare this slot. Do not retry or list skills.")}
         state = json.loads(path.read_text())
         if state["repo"] != repo or state["slot"] != slot:
             raise ValueError("assignment identity mismatch")

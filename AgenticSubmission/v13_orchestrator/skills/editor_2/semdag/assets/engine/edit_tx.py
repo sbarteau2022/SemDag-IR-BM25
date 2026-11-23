@@ -225,8 +225,8 @@ def begin(repo, slot, rel, a, b, check, remaining, issue='', baseline=None):
                       f"Handle: {s['handle']}\n\nIssue: {issue}\n\n"
                       f"Numbered view:\n{out['text']}\n\n"
                       "Use run_skill_script with skill_name semdag, file_path scripts/run.py, "
-                      "and args [--edit, HANDLE, --slot, SLOT, --text, REPLACEMENT]. "
-                      "All args are strings. Use --view HANDLE --slot SLOT --lines A-B to narrow a truncated view. "
+                      "and positional_args [edit, HANDLE, REPLACEMENT]. "
+                      "All positional arguments are strings. Use positional_args [view, HANDLE, A-B] to narrow a truncated view. "
                       "Return EDIT_READY with the new handle after edit success. "
                       "Outside tests and finalization belong to the orchestrator. "
                       "Never edit central source, other slots or tests/configs.\n")
