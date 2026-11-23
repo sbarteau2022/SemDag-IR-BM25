@@ -439,3 +439,34 @@ def test_thinking_budget_drop_removes_field_for_vllm_metal():
     assert "thinking_token_budget" not in out
     assert out["extra_body"] == {"keep": 1}
     assert body["thinking_token_budget"] == 4096  # caller's dict untouched
+
+
+def test_capture_records_exact_body_bytes_without_headers(tmp_path):
+    raw=b'{ "model": "local", "messages": [{"role":"user","content":"status"}] }'
+    call_id='a'*32
+    llm_proxy.capture_request(tmp_path,call_id,raw)
+    path=tmp_path/(call_id+'.request.json')
+    assert path.read_bytes()==raw
+    assert path.stat().st_mode&0o777==0o600
+    with pytest.raises(FileExistsError):llm_proxy.capture_request(tmp_path,call_id,raw)
+    with pytest.raises(ValueError):llm_proxy.capture_request(tmp_path,'../escape',raw)
+
+
+def test_proxy_optional_capture_preserves_existing_response(tmp_path):
+    FakeUpstream.seen=[]
+    up=ThreadingHTTPServer(('127.0.0.1',0),FakeUpstream)
+    thread=threading.Thread(target=up.serve_forever,daemon=True);thread.start()
+    capture=tmp_path/'requests'
+    px=llm_proxy.serve(0,f'127.0.0.1:{up.server_address[1]}',str(tmp_path/'capture.sqlite'),'capture',timeout=10,capture_dir=capture)
+    worker=threading.Thread(target=px.serve_forever,daemon=True);worker.start()
+    raw=b'{ "model":"test", "messages":[{"role":"user","content":"hi"}], "max_tokens":10 }'
+    try:
+        request=urllib.request.Request(f'http://127.0.0.1:{px.server_address[1]}/v1/chat/completions',data=raw,headers={'Content-Type':'application/json','Authorization':'Bearer test-unit-header'})
+        with urllib.request.urlopen(request,timeout=10) as response:result=json.load(response)
+        assert result['choices']
+        paths=list(capture.glob('*.request.json'));assert len(paths)==1
+        assert paths[0].read_bytes()==raw and b'test-unit-header' not in paths[0].read_bytes()
+        assert FakeUpstream.seen[-1]['messages']==json.loads(raw)['messages']
+        assert FakeUpstream.seen[-1]['stream'] is True
+    finally:
+        px.shutdown();up.shutdown();px.server_close();up.server_close()

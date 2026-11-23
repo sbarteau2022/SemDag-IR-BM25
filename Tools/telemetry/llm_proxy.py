@@ -6,7 +6,7 @@ Why: the harness (ADK LiteLlm) sends non-streaming chat requests, so time-to-fir
 ordinary non-streaming response the client asked for, and writes one row per call to
 SQLite (`llm_calls`). If the client itself asked to stream, chunks are relayed as-is.
 
-Kept light on purpose: no tokenizing and no prompt storage during the run, one SQLite
+Kept light by default: no tokenizing or prompt storage unless optional local request capture is enabled; one SQLite
 insert per call, stdlib only. Everything heavier happens in `ingest.py` after the run.
 
 Thinking-budget enforcement: when started with `--thinking-budget-field drop`
@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import http.client
 import json
+import os
 import sys
 import time
 import uuid
@@ -265,8 +266,19 @@ def fill_generation_defaults(body: dict, top_k: int | None) -> dict:
     return body
 
 
+def capture_request(directory, call_id: str, raw: bytes) -> None:
+    """Record exact local diagnostic body bytes, excluding all HTTP headers."""
+    if len(call_id) != 32 or uuid.UUID(hex=call_id).hex != call_id:
+        raise ValueError("invalid capture ID")
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    fd = os.open(directory / f"{call_id}.request.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(raw)
+
+
 def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
-                 budget_field: str | None = None, default_top_k: int | None = None):
+                 budget_field: str | None = None, default_top_k: int | None = None, capture_dir=None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -326,6 +338,8 @@ def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
                    "req_bytes": len(raw), **request_fields(body),
                    "budget_enforced": 0, "reasoning_chunks_at_cut": None,
                    "phase2_status": None, "reasoning_dropped_chars": 0}
+            if capture_dir is not None:
+                capture_request(capture_dir, row["call_id"], raw)
             client_stream = bool(body.get("stream"))
             up = fill_generation_defaults(enforce_thinking_budget(dict(body), budget_field),
                                           default_top_k)
@@ -446,12 +460,12 @@ def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
 
 
 def serve(listen: int, upstream: str, db_path: str, run_id: str, timeout: float = 900.0,
-          budget_field: str | None = None, default_top_k: int | None = None):
+          budget_field: str | None = None, default_top_k: int | None = None, capture_dir=None):
     host, port = upstream.rsplit(":", 1)
     con = tdb.connect(db_path)
     httpd = ThreadingHTTPServer(("127.0.0.1", listen),
                                 make_handler((host, int(port)), con, run_id, timeout,
-                                             budget_field, default_top_k))
+                                             budget_field, default_top_k, capture_dir))
     httpd.daemon_threads = True
     return httpd
 
@@ -467,9 +481,10 @@ def main():
                     help="'drop' removes thinking_token_budget from the request and enforces it in the proxy (vllm-metal); any other name copies the budget into that field")
     ap.add_argument("--default-top-k", type=int, default=None,
                     help="fill top_k when a request omits it (scorer: 64 from generation_config)")
+    ap.add_argument("--capture-requests", default=None, help="local diagnostic request-body directory; no HTTP headers captured")
     a = ap.parse_args()
     httpd = serve(a.listen, a.upstream, a.db, a.run_id, a.timeout, a.thinking_budget_field,
-                  a.default_top_k)
+                  a.default_top_k, a.capture_requests)
     print(f"llm_proxy: 127.0.0.1:{a.listen} -> {a.upstream} run_id={a.run_id} db={a.db} "
           f"thinking_budget_field={a.thinking_budget_field}", flush=True)
     httpd.serve_forever()

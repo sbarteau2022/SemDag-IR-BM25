@@ -50,3 +50,7 @@ docker run --rm gemma4-e4b-telemetry:run-X sqlite3 telemetry.sqlite "select fail
 - `reasoning_chunks` approximates reasoning tokens (mlx_lm streams about one chunk per token); `thinking_tokens` from the tokenizer is the reference.
 - Proxy rows are joined to tasks by wall clock, which holds because local runs use concurrency 1.
 - HyperDX is not wired. SQLite stays the authoritative local record; an exporter can be added once needed.
+
+## Optional local request capture
+
+`llm_proxy.py --capture-requests <local-directory>` records exact incoming chat request body bytes before the existing stream/budget adaptation. HTTP headers are not recorded. Each UUID-named file is created exclusively with mode 0600; capture is off by default. Use only for local protocol diagnosis, retain task/model bodies locally, and do not ingest them into the research store or publish them. This does not repair or infer any arguments.
