@@ -1,2 +1,2 @@
-# Proposed edit/tool design
-See ../../specs/2026-11-22-v13-edit-tool-policy.md. Native transaction state and fused lifecycle actions proposed; no implementation yet. Subagent policy experiment deferred until successful-edit timing exists.
+# Stage 1 plan
+Owner approved Stage 1. ADR-002 governs. Implement native transaction module, protect legacy edit/apply paths, wire prepare/finalize into existing roles without changing dispatch policy, test adversarial boundaries and compare native lifecycle; run E4B smoke in macOS Seatbelt/subprocess. Stage 2 deferred.

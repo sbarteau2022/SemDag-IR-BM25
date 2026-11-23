@@ -1,6 +1,6 @@
 # v13 edit execution, tool calls, then subagent policy
 
-Status: PROPOSED; owner design review required before implementation. User scope: optimize edit execution and tool calls, then refine subagent policy. E4B only; macOS Seatbelt/subprocess; no Docker; unchanged four-minute/default-token limits. No official harness patches, new runtime model APIs or hidden model-output rewrites.
+Status: Stage 1 APPROVED by owner; Stage 2 policy experiments deferred until Stage 1 timing evidence. User scope: optimize edit execution and tool calls, then refine subagent policy. E4B only; macOS Seatbelt/subprocess; no Docker; unchanged four-minute/default-token limits. No official harness patches, new runtime model APIs or hidden model-output rewrites.
 
 ## Evidence and limits
 
