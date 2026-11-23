@@ -113,7 +113,11 @@ CREATE VIEW IF NOT EXISTS v_thinking_budget AS
 MIGRATIONS = [("tasks", "destructive_write", "INTEGER"), ("tasks", "test_env_broken", "INTEGER"),
               ("tasks", "agent_saw_env_broken", "INTEGER"),
               ("steps", "message_text", "TEXT"),
-              ("llm_calls", "enforced_thinking_budget", "INTEGER")]
+              ("llm_calls", "enforced_thinking_budget", "INTEGER"),
+              ("llm_calls", "budget_enforced", "INTEGER"),
+              ("llm_calls", "reasoning_chunks_at_cut", "INTEGER"),
+              ("llm_calls", "phase2_status", "INTEGER"),
+              ("llm_calls", "reasoning_dropped_chars", "INTEGER")]
 
 _LOCK = threading.Lock()
 

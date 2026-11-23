@@ -16,7 +16,17 @@ STOP = {"the", "and", "for", "that", "this", "with", "not", "but", "are", "was",
         "def", "self", "return", "import", "none", "true", "false", "class", "if", "else",
         "in", "is", "of", "to", "it", "as", "on", "be", "or", "an", "at", "by", "we"}
 DEFAULT_DAMPING = 0.15
-DEFAULT_RELATION_WEIGHTS = {"contains": 1.0, "calls": 1.0, "imports": 1.0}
+DEFAULT_RELATION_WEIGHTS = {
+    "calls": 1.5,
+    "loop_calls": 1.4,
+    "recurses": 1.3,
+    "instantiates": 1.0,
+    "inherits": 0.8,
+    "member_of": 0.6,
+    "contains": 0.35,
+    "imports": 0.25,
+}
+WALK_NODE_KINDS = ("file", "class", "function", "method", "loop", "recursion")
 
 
 def is_test_path(rel):
@@ -81,7 +91,7 @@ def _bm25(docs, query):
 
 
 def _walk(ir, restart, damping, weights, include_tests=False, direction="undirected"):
-    keep = {n["id"] for n in ir["nodes"] if n["kind"] in ("file", "class", "function", "method")
+    keep = {n["id"] for n in ir["nodes"] if n["kind"] in WALK_NODE_KINDS
             and is_candidate_path(n.get("file", ""), include_tests)}
     adj = defaultdict(lambda: defaultdict(float)); used = Counter()
     for edge in ir["edges"]:
@@ -126,14 +136,15 @@ def rank(ir, snap, issue, top_n=10, damping=DEFAULT_DAMPING, include_tests=False
     graph, used = _walk(ir, restart, damping, weights, include_tests, direction) if restart and damping else (restart, Counter())
     lexical_order = sorted(positive, key=lambda i: (-scores[i], docs[i]["node"]["file"], docs[i]["node"]["line"]))
     lexical_rank = {i: pos + 1 for pos, i in enumerate(lexical_order)}
-    order = sorted(positive, key=lambda i: (-graph.get(docs[i]["node"]["id"], 0.0),
+    eligible = [i for i, doc in enumerate(docs) if graph.get(doc["node"]["id"], 0.0) > 0.0]
+    order = sorted(eligible, key=lambda i: (-graph.get(docs[i]["node"]["id"], 0.0),
                                             docs[i]["node"]["file"], docs[i]["node"]["line"]))
     top = []
     for i in order[:top_n]:
         node = docs[i]["node"]
         top.append({"id": node["id"], "name": node["name"], "qualname": node.get("qualname", node["name"]),
                     "file": node["file"], "line": node["line"], "end_line": node["end_line"],
-                    "lexical_rank": lexical_rank[i], "lexical_score": scores[i],
+                    "lexical_rank": lexical_rank.get(i), "lexical_score": scores[i],
                     "structural_score": graph.get(node["id"], 0.0)})
     return {"method": "bm25_typed_semdag", "damping": damping, "direction": direction,
             "candidates": len(docs),

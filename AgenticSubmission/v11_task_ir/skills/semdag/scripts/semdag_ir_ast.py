@@ -133,6 +133,8 @@ class _Flow:
     subscripted bases (`buf[]`). Each exit is recorded with the branch condition that guards it."""
 
     EXIT = {ast.Return: "return", ast.Raise: "raise", ast.Break: "break", ast.Continue: "continue"}
+    MUTATING = {"append", "extend", "insert", "pop", "remove", "clear", "update", "add",
+                "discard", "setdefault", "sort", "reverse"}
 
     def __init__(self):
         self.exposed, self.stored = set(), set()
@@ -156,6 +158,19 @@ class _Flow:
             self.load(node.value, defined)
             if isinstance(node, ast.Subscript):
                 self.load(node.slice, defined)
+            return
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute) and node.func.attr in self.MUTATING:
+                recv = _key(node.func.value)
+                if recv:
+                    if recv not in defined:
+                        self.exposed.add(recv)
+                    self.stored.add(recv)
+            self.load(node.func, defined)
+            for arg in node.args:
+                self.load(arg, defined)
+            for kw in node.keywords:
+                self.load(kw.value, defined)
             return
         if isinstance(node, ast.NamedExpr):
             self.load(node.value, defined)

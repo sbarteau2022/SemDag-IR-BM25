@@ -23,7 +23,9 @@ Guards: the path must stay inside the repository; test and runner-config files a
 parse after it, otherwise nothing is written. Standard library only.
 """
 import ast
+import builtins
 import difflib
+import importlib.util
 import io
 import hashlib
 import json
@@ -398,17 +400,172 @@ def _parses(text):
         return False, {"line": None, "msg": str(ex)}
 
 
+def _module_exports(py_path):
+    """Static top-level exports of a Python file, or None if dynamic (__getattr__ / import *)."""
+    try:
+        with open(py_path, encoding="utf-8", errors="replace") as fh:
+            tree = ast.parse(fh.read())
+    except (OSError, SyntaxError, ValueError, RecursionError):
+        return None
+    names = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node.name == "__getattr__":
+                return None
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    names.add(t.id)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                if alias.name == "*":
+                    return None
+                names.add(alias.asname or alias.name.split(".")[0])
+    return names
+
+
+def _resolve_repo_module(repo, rel, mod_name, level):
+    """Return path to a repo-local .py file for (mod_name, level), or None."""
+    if level > 0:
+        parts = rel.replace("\\", "/").split("/")
+        pkg = parts[:-1]
+        if level - 1 > len(pkg):
+            return None
+        base = os.path.join(repo, *pkg[:len(pkg) - level + 1]) if pkg[:len(pkg) - level + 1] else repo
+        rel_mod = mod_name.replace(".", "/") if mod_name else ""
+        cands = [os.path.join(base, rel_mod + ".py"), os.path.join(base, rel_mod, "__init__.py")] if rel_mod else [os.path.join(base, "__init__.py")]
+    else:
+        rel_mod = mod_name.replace(".", "/")
+        cands = []
+        for root in (repo, os.path.join(repo, "src"), os.path.join(repo, "lib")):
+            cands.append(os.path.join(root, rel_mod + ".py"))
+            cands.append(os.path.join(root, rel_mod, "__init__.py"))
+    for c in cands:
+        if os.path.isfile(c):
+            return c
+    return None
+
+
+def _collect_imports(text):
+    """Collect non-try-except imports as (lineno, module, level, name)."""
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError, RecursionError):
+        return []
+    out = []
+
+    def walk(stmts, in_try=False):
+        for node in stmts:
+            if isinstance(node, ast.Try) or (hasattr(ast, "TryStar") and isinstance(node, ast.TryStar)):
+                walk(node.body, True)
+                for h in node.handlers:
+                    walk(h.body, True)
+                walk(node.orelse, in_try)
+                walk(node.finalbody, in_try)
+                continue
+            if in_try:
+                continue
+            if isinstance(node, ast.Import):
+                for a in node.names:
+                    out.append((node.lineno, a.name, 0, None))
+            elif isinstance(node, ast.ImportFrom):
+                for a in node.names:
+                    out.append((node.lineno, node.module or "", node.level or 0, a.name))
+            for child in ast.iter_child_nodes(node):
+                if isinstance(child, (ast.If, ast.With, ast.AsyncWith, ast.For, ast.AsyncFor, ast.While,
+                                      ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    body = getattr(child, "body", [])
+                    if isinstance(child, ast.If) and isinstance(child.test, ast.Name) and child.test.id == "TYPE_CHECKING":
+                        continue
+                    walk(body, in_try)
+                    walk(getattr(child, "orelse", []), in_try)
+
+    walk(tree.body)
+    return out
+
+
+def _import_errors(repo, rel, old_content, new_content):
+    """Check newly introduced imports against the repository, builtins, and importlib."""
+    old_set = {(m, lvl, nm) for _ln, m, lvl, nm in _collect_imports(old_content)}
+    errs = []
+    for ln, mod, lvl, nm in _collect_imports(new_content):
+        if (mod, lvl, nm) in old_set:
+            continue
+        if lvl > 0:
+            target = _resolve_repo_module(repo, rel, mod, lvl)
+            if not target:
+                if not mod and nm and nm != "*":
+                    sub = _resolve_repo_module(repo, rel, nm, lvl)
+                    if sub:
+                        continue
+                errs.append({"line": ln, "import": f"{'.' * lvl}{mod}", "symbol": nm,
+                             "msg": "relative module not found in repository"})
+                continue
+            if nm and nm != "*":
+                exports = _module_exports(target)
+                if exports is not None and nm not in exports and not _resolve_repo_module(repo, rel, f"{mod}.{nm}" if mod else nm, lvl):
+                    errs.append({"line": ln, "import": f"{'.' * lvl}{mod}", "symbol": nm,
+                                 "msg": f"'{nm}' not defined in {os.path.relpath(target, repo)}"})
+            continue
+        # Absolute import
+        repo_target = _resolve_repo_module(repo, rel, mod, 0)
+        if repo_target:
+            if nm and nm != "*":
+                exports = _module_exports(repo_target)
+                if exports is not None and nm not in exports and not _resolve_repo_module(repo, rel, f"{mod}.{nm}", 0):
+                    errs.append({"line": ln, "import": mod, "symbol": nm,
+                                 "msg": f"'{nm}' not defined in {os.path.relpath(repo_target, repo)}"})
+            continue
+        if mod == "builtins":
+            if nm and nm != "*" and not hasattr(builtins, nm):
+                errs.append({"line": ln, "import": "builtins", "symbol": nm,
+                             "msg": f"'{nm}' is not in Python builtins"})
+            continue
+        try:
+            spec = importlib.util.find_spec(mod)
+        except (ImportError, ValueError, AttributeError):
+            spec = None
+        if spec is None:
+            errs.append({"line": ln, "import": mod, "symbol": nm,
+                         "msg": f"module '{mod}' not found"})
+        elif nm and nm != "*" and spec.origin and spec.origin.endswith(".py") and os.path.isfile(spec.origin):
+            exports = _module_exports(spec.origin)
+            if exports is not None and nm not in exports:
+                sub_spec = None
+                try:
+                    sub_spec = importlib.util.find_spec(f"{mod}.{nm}")
+                except (ImportError, ValueError, AttributeError):
+                    pass
+                if sub_spec is None:
+                    errs.append({"line": ln, "import": mod, "symbol": nm,
+                                 "msg": f"'{nm}' not found in module '{mod}'"})
+    return errs
+
+
 def commit(absolute, rel, old_content, build, strategy, eol):
-    """build(new_text) -> full new content. Writes only if the syntax guard passes."""
+    """build(new_text) -> full new content. Writes only if syntax and import guards pass."""
     was_ok = (not rel.endswith(".py")) or _parses(old_content)[0]
-    last_err, chosen, note = None, None, None
+    repo = absolute[:-len(rel)].rstrip(os.sep) if rel and absolute.endswith(rel) else os.path.dirname(absolute)
+    last_err, chosen, note, imp_err = None, None, None, None
     for candidate, tag in build:
         ok, err = (True, None) if not rel.endswith(".py") or not was_ok else _parses(candidate)
         if ok:
+            if rel.endswith(".py") and was_ok:
+                imp = _import_errors(repo, rel, old_content, candidate)
+                if imp:
+                    imp_err = imp
+                    continue
             chosen, note = candidate, tag
             break
         last_err = err
     if chosen is None:
+        if imp_err and last_err is None:
+            return {"ok": False, "error": "refused: unresolved import or symbol",
+                    "import_errors": imp_err,
+                    "hint": "Nothing was written. Fix or remove the unknown import/symbol and call again."}
         return {"ok": False, "error": "refused: the file would no longer parse",
                 "syntax_error": last_err, "hint": "Nothing was written. Fix new_string (indentation, brackets, "
                 "quotes) and call again with the same reference."}

@@ -60,6 +60,15 @@ On four outside repositories (attrs, click, jinja, marshmallow), resolved call e
 
 ## Run the localizer
 
+For Qwen decode, `Tools/local/serve_vllm_metal_qwen.sh` exposes performance
+mode, sequence count, and device-memory utilization as environment overrides.
+The measured default remains `interactivity`, two sequences, and 80%: warm
+512-token requests reached 66.4--68.3 tok/s, while the matched throughput-mode,
+one-sequence profile reached 65.2 tok/s and was not promoted.
+Native MTP remains opt-in with `VLLM_MTP_SPEC_TOKENS`; vLLM Metal 0.33 rejects
+MTP for this hybrid GDN target, so the safe default is `0` until that backend
+combination is implemented.
+
 The skill uses only Python's standard library:
 
 ```bash

@@ -9,6 +9,19 @@ SQLite (`llm_calls`). If the client itself asked to stream, chunks are relayed a
 Kept light on purpose: no tokenizing and no prompt storage during the run, one SQLite
 insert per call, stdlib only. Everything heavier happens in `ingest.py` after the run.
 
+Thinking-budget enforcement: when started with `--thinking-budget-field drop`
+(vllm-metal), the budget is removed from the upstream request (the server would
+reject it with HTTP 400) and enforced here instead. The proxy streams the reasoning,
+counts streamed reasoning deltas (vLLM streams one chunk per generated token, so the
+chunk count is the token estimate), stops at the budget, and resumes with a second
+upstream request that presents the truncated reasoning as a completed
+`<|channel>thought ... <channel|>` channel with thinking switched off, so the model
+produces the action (content / tool calls) conditioned on exactly the budget-limited
+reasoning. That is the same observable behaviour as vLLM's
+ThinkingTokenBudgetLogitsProcessor, which forces the reasoning-end token and lets
+generation continue. The telemetry row records `budget_enforced`,
+`reasoning_chunks_at_cut` and `phase2_status` for the gate.
+
 Run (inside the no-network seatbelt):
   sandbox-exec -f Tools/seatbelt/no_network.sb .venv-harness/bin/python \
     Tools/telemetry/llm_proxy.py --listen 8125 --upstream 127.0.0.1:8124 \
@@ -53,6 +66,8 @@ class Accumulator:
         self.meta: dict = {}
         self.chunks = 0
         self.reasoning_chunks = 0
+        self.reasoning_closed = False   # set when the thinking budget is hit
+        self.reasoning_dropped_chars = 0
         self.ttft = None
         self.t_first_reasoning = None
         self.t_last_reasoning = None
@@ -73,12 +88,19 @@ class Accumulator:
             c = delta.get("content")
             tcs = delta.get("tool_calls") or []
             dt = now - self.t0
+            kept_r = None
             if r:
-                self.reasoning.append(r)
-                self.reasoning_chunks += 1
-                if self.t_first_reasoning is None:
-                    self.t_first_reasoning = dt
-                self.t_last_reasoning = dt
+                if self.reasoning_closed:
+                    # Thinking already cut at the budget (phase 2 must not add
+                    # more); count it so a bad resume is visible in telemetry.
+                    self.reasoning_dropped_chars += len(r)
+                else:
+                    kept_r = r
+                    self.reasoning.append(r)
+                    self.reasoning_chunks += 1
+                    if self.t_first_reasoning is None:
+                        self.t_first_reasoning = dt
+                    self.t_last_reasoning = dt
             if c or tcs:
                 if self.t_first_action is None:
                     self.t_first_action = dt
@@ -86,7 +108,7 @@ class Accumulator:
                 self.content.append(c)
             for tc in tcs:
                 self._merge_tool_call(tc)
-            if (r or c or tcs) and self.ttft is None:
+            if (kept_r or c or tcs) and self.ttft is None:
                 self.ttft = dt
             if choice.get("finish_reason"):
                 self.finish_reason = choice["finish_reason"]
@@ -179,13 +201,17 @@ def enforce_thinking_budget(body: dict, field: str | None) -> dict:
 
     ADK sends the budget as `thinking_token_budget` (top level, or under `extra_body`), which
     vLLM's logits processor enforces on the scorer. vllm-metal rejects it with HTTP 400, so
-    field="drop" removes it (the budget is then NOT enforced locally). Any other field name
-    copies a positive budget into that top-level field, leaving a field the client set alone.
+    field="drop" removes it from the request and the handler enforces it in-stream instead
+    (two-phase resume: stop at the budget, present the truncated reasoning as a completed
+    channel with thinking off). Any other field name copies a positive budget into that
+    top-level field, leaving a field the client set alone.
     """
     if not field:
         return body
     if field == "drop":
-        # vllm-metal rejects thinking_token_budget with HTTP 400; remove it (budget NOT enforced).
+        # vllm-metal rejects thinking_token_budget with HTTP 400; remove it here.
+        # The budget is then enforced by the proxy itself (see build_resume_body),
+        # not by the server.
         body = dict(body)
         body.pop("thinking_token_budget", None)
         if isinstance(body.get("extra_body"), dict):
@@ -196,6 +222,36 @@ def enforce_thinking_budget(body: dict, field: str | None) -> dict:
     if isinstance(budget, (int, float)) and budget > 0 and field not in body:
         body = dict(body)
         body[field] = int(budget)
+    return body
+
+
+def build_resume_body(up: dict, acc: Accumulator) -> dict:
+    """Second upstream request after the thinking budget is hit.
+
+    Presents the truncated reasoning as a completed thinking channel, with thinking
+    switched off, so the model produces the action (content / tool calls) conditioned
+    on exactly the budget-limited reasoning. The reasoning channel is what the model
+    itself emits (`<|channel>thought\\n...<channel|>`), and with `enable_thinking`
+    off the template issues no new think trigger, so the model goes straight to the
+    action. Total output for the turn stays capped at the original max_tokens: the
+    resume may only spend what the reasoning did not.
+    """
+    reasoning = "".join(acc.reasoning)
+    channel = "<|channel>thought\n" + reasoning + "<channel|>"
+    body = dict(up)
+    body["messages"] = list(up.get("messages") or []) + [
+        {"role": "assistant", "content": channel}
+    ]
+    kwargs = dict(up.get("chat_template_kwargs") or {})
+    kwargs["enable_thinking"] = False
+    body["chat_template_kwargs"] = kwargs
+    for key in ("max_tokens", "max_completion_tokens"):
+        if isinstance(up.get(key), (int, float)) and up[key]:
+            body[key] = max(1, int(up[key]) - acc.reasoning_chunks)
+    body.pop("thinking_token_budget", None)
+    if isinstance(body.get("extra_body"), dict):
+        body["extra_body"] = {k: v for k, v in body["extra_body"].items()
+                              if k != "thinking_token_budget"}
     return body
 
 
@@ -230,6 +286,28 @@ def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
             self.wfile.write(data)
             conn.close()
 
+        def _stream_into(self, resp, acc: Accumulator, client_stream: bool,
+                         budget: int | None) -> bool:
+            """Feed streamed chunks into acc, relaying them if the client streams.
+
+            Returns True when the thinking budget was hit mid-reasoning: the caller
+            should close this upstream connection and resume with build_resume_body().
+            Only triggers while the model is still reasoning (no content or tool
+            calls yet, no finish reason). The token count is the streamed reasoning
+            delta count; vLLM streams one chunk per generated token.
+            """
+            for chunk, line in iter_sse(resp):
+                acc.feed(chunk, time.monotonic())
+                if client_stream:
+                    self.wfile.write(line + b"\n\n")
+                    self.wfile.flush()
+                if (budget is not None and acc.reasoning_chunks >= budget
+                        and not acc.content and not acc.tool_calls
+                        and acc.finish_reason is None):
+                    acc.reasoning_closed = True
+                    return True
+            return False
+
         def do_GET(self):
             self._passthrough("GET", None)
 
@@ -245,14 +323,22 @@ def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
             wall = time.time()
             t0 = time.monotonic()
             row = {"run_id": run_id, "call_id": uuid.uuid4().hex, "wall_start": wall,
-                   "req_bytes": len(raw), **request_fields(body)}
+                   "req_bytes": len(raw), **request_fields(body),
+                   "budget_enforced": 0, "reasoning_chunks_at_cut": None,
+                   "phase2_status": None, "reasoning_dropped_chars": 0}
             client_stream = bool(body.get("stream"))
             up = fill_generation_defaults(enforce_thinking_budget(dict(body), budget_field),
                                           default_top_k)
             row["enforced_thinking_budget"] = up.get(budget_field) if budget_field else None
+            # Proxy-side enforcement only when the budget was dropped from the
+            # request (vllm-metal). Otherwise the server enforces it itself.
+            req_budget = request_fields(body)["req_thinking_budget"]
+            budget = (int(req_budget) if budget_field == "drop"
+                      and isinstance(req_budget, (int, float)) and req_budget > 0 else None)
             up["stream"] = True
             up["stream_options"] = {"include_usage": True}
             acc = Accumulator(t0)
+            responded = False
             try:
                 conn = http.client.HTTPConnection(*upstream, timeout=timeout)
                 conn.request("POST", self.path, body=json.dumps(up).encode(),
@@ -267,6 +353,7 @@ def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
                     self.send_header("Content-Length", str(len(data)))
                     self.end_headers()
                     self.wfile.write(data)
+                    responded = True
                 else:
                     if client_stream:
                         self.send_response(200)
@@ -274,34 +361,56 @@ def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
                         self.send_header("Cache-Control", "no-cache")
                         self.send_header("Connection", "close")
                         self.end_headers()
-                    for chunk, line in iter_sse(r):
-                        acc.feed(chunk, time.monotonic())
-                        if client_stream:
-                            self.wfile.write(line + b"\n\n")
-                            self.wfile.flush()
+                    hit = self._stream_into(r, acc, client_stream, budget)
+                    conn.close()
+                    if hit:
+                        row["budget_enforced"] = 1
+                        row["reasoning_chunks_at_cut"] = acc.reasoning_chunks
+                        resume = build_resume_body(up, acc)
+                        conn2 = http.client.HTTPConnection(*upstream, timeout=timeout)
+                        conn2.request("POST", self.path, body=json.dumps(resume).encode(),
+                                      headers={"Content-Type": "application/json"})
+                        r2 = conn2.getresponse()
+                        row["phase2_status"] = r2.status
+                        if r2.status != 200:
+                            data = r2.read()
+                            row["error"] = ("resume: " + data[:400].decode(errors="replace"))
+                            if not client_stream:
+                                err = json.dumps({"error": {"message": row["error"]}}).encode()
+                                self.send_response(502)
+                                self.send_header("Content-Type", "application/json")
+                                self.send_header("Content-Length", str(len(err)))
+                                self.end_headers()
+                                self.wfile.write(err)
+                                responded = True
+                        else:
+                            self._stream_into(r2, acc, client_stream, None)
+                        conn2.close()
                     if client_stream:
                         self.wfile.write(b"data: [DONE]\n\n")
                         self.wfile.flush()
                         self.close_connection = True
-                    else:
+                        responded = True
+                    elif not responded:
                         data = json.dumps(acc.response()).encode()
                         self.send_response(200)
                         self.send_header("Content-Type", "application/json")
                         self.send_header("Content-Length", str(len(data)))
                         self.end_headers()
                         self.wfile.write(data)
-                conn.close()
+                        responded = True
             except Exception as exc:  # record, then surface as 502
                 row["error"] = f"{type(exc).__name__}: {exc}"[:500]
-                try:
-                    data = json.dumps({"error": {"message": row["error"]}}).encode()
-                    self.send_response(502)
-                    self.send_header("Content-Type", "application/json")
-                    self.send_header("Content-Length", str(len(data)))
-                    self.end_headers()
-                    self.wfile.write(data)
-                except Exception:
-                    pass
+                if not responded:
+                    try:
+                        data = json.dumps({"error": {"message": row["error"]}}).encode()
+                        self.send_response(502)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Content-Length", str(len(data)))
+                        self.end_headers()
+                        self.wfile.write(data)
+                    except Exception:
+                        pass
             finally:
                 total = time.monotonic() - t0
                 usage = acc.usage or {}
@@ -319,6 +428,7 @@ def make_handler(upstream: tuple[str, int], con, run_id: str, timeout: float,
                     stream_chunks=acc.chunks,
                     reasoning_chunks=acc.reasoning_chunks,
                     reasoning_chars=sum(map(len, acc.reasoning)),
+                    reasoning_dropped_chars=acc.reasoning_dropped_chars,
                     content_chars=sum(map(len, acc.content)),
                     n_tool_calls=len(acc.tool_calls),
                     tool_names=",".join((t.get("function") or {}).get("name", "?")
@@ -354,7 +464,7 @@ def main():
     ap.add_argument("--run-id", required=True)
     ap.add_argument("--timeout", type=float, default=900.0)
     ap.add_argument("--thinking-budget-field", default=None,
-                    help="'drop' removes thinking_token_budget (vllm-metal); any other name copies the budget into that field")
+                    help="'drop' removes thinking_token_budget from the request and enforces it in the proxy (vllm-metal); any other name copies the budget into that field")
     ap.add_argument("--default-top-k", type=int, default=None,
                     help="fill top_k when a request omits it (scorer: 64 from generation_config)")
     a = ap.parse_args()

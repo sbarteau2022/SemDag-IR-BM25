@@ -355,3 +355,40 @@ def test_no_read_file_and_read_line_is_the_exact_call(mods, repo):
     assert "read_file" not in cfg["tools"]
     out = _locate(mods, repo, "split_cells returns the wrong split", "t13")
     assert any(l.startswith('read fix_edit.py ["pkg/mod.py L') for l in out["text"].splitlines())
+
+
+def test_mutating_container_calls_are_tracked_as_loop_carried(mods, tmp_path):
+    src = textwrap.dedent('''\
+        def collect(items):
+            out = []
+            for item in items:
+                out.append(item)
+            return out
+    ''')
+    ir = _ir(mods, _git_repo(tmp_path, {"c.py": src}), "t14")
+    loop = next(n for n in ir["nodes"] if n["kind"] == "loop")
+    assert "out" in loop["carried"]
+
+
+def test_graph_walk_recalls_zero_bm25_neighbor_and_uses_recurrent_edges(mods, tmp_path):
+    src = textwrap.dedent('''\
+        def entrypoint(items):
+            for x in items:
+                _internal_worker(x)
+
+
+        def _internal_worker(val):
+            return val + 1
+    ''')
+    repo_dir = _git_repo(tmp_path, {"w.py": src})
+    ir = _ir(mods, repo_dir, "t15")
+    snap = mods["cache"].read("t15", "snapshot.json")
+    ranked = mods["retriever"].rank(ir, snap, "entrypoint fails on items", top_n=5, damping=0.15)
+    names = [s["name"] for s in ranked["top"]]
+    assert "entrypoint" in names and "_internal_worker" in names
+    assert "loop_calls" in ranked["relations_used"]
+    worker = next(s for s in ranked["top"] if s["name"] == "_internal_worker")
+    assert worker["lexical_score"] == 0.0 and worker["structural_score"] > 0.0
+    # d=0 must remain pure BM25 (only positive lexical hits)
+    d0 = mods["retriever"].rank(ir, snap, "entrypoint fails on items", top_n=5, damping=0.0)
+    assert [s["name"] for s in d0["top"]] == ["entrypoint"]
