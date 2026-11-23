@@ -1,2 +1,2 @@
 # Status
-v13 testing complete. Native correctness repairs verified; 217 tests pass and official validation passes. Grading qualified. Live mechanism gate and task-resolution promotion NOT achieved: two valid development runs unresolved, second timeout. No Kaggle submission. See docs/runs/v13_QUALIFICATION_2026-11-22.md.
+Design review pending: v13 edit execution and tool-call optimization, followed by subagent policy. Three native edit/apply failure probes recorded. No implementation changed in this session. See specs/2026-11-22-v13-edit-tool-policy.md.
