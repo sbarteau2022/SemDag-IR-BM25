@@ -1,6 +1,6 @@
 # v13 role capability policy — proposed next pass
 
-Status: PROPOSED; no Stage 2 implementation. Motivation: Stage 1 native gates pass, but the live root bypassed them through six shell calls and never dispatched an editor or produced a patch.
+Status: APPROVED by owner; implement capability experiment, keep timing-threshold tuning deferred. Motivation: Stage 1 native gates pass, but the live root bypassed them through six shell calls and never dispatched an editor or produced a patch.
 
 Recommended first policy experiment: remove run_command from root and both editors; preserve E4B, budgets, editor count, ambiguity rule and retry count. Give root only its official status/submit/delegation tools plus a role-specific skill entry exposing prepare/finalize/status. Give editors a role-specific entry exposing view/edit/status. Static action allowlists are checked in native code before state or file mutation; user-provided flags cannot change roles. Keep a single canonical skill name and simple script path per role if the compiler supports independent resource registration.
 
