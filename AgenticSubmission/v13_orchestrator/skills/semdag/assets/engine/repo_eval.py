@@ -28,6 +28,7 @@ import json
 import os
 import re
 import sys
+import shlex
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wsroot  # noqa: E402
@@ -187,6 +188,20 @@ def _span(a, b):
     return f"{a}-{b}" if b != a else str(a)
 
 
+def check_for_site(ir, snap, repo, site):
+    """Choose verification for the actual assigned site, including alternatives."""
+    def read(path):
+        return snap["files"].get(path, {}).get("content")
+    rel = site["file"]
+    targets = [(rel, site.get("qualname", site["name"]))]
+    tests = [t["file"] for t in impact.rank_tests(ir, repo, targets, read)[:impact.MAX_TESTS]]
+    if tests:
+        node = _test_node(tests[0], site["name"], read(tests[0]))
+        return f"python -m pytest {shlex.quote(node)} -q -x 2>&1 | tail -15"
+    code = f"compile(open({rel!r}, 'rb').read(), {rel!r}, 'exec')"
+    return "python -c " + shlex.quote(code)
+
+
 def locate(opt):
     """v11 locate: problem IR -> anchor -> locus -> one action of about 400 characters.
 
@@ -229,7 +244,7 @@ def locate(opt):
             return {"mode": "locate", "text": out_text}
         site, how, evidence = nodes[ranked["top"][0]["id"]], "bm25", "rank 1, a guess"
         alts = [s for s in ranked["top"][1:3]]
-    loc = task_ir.locus(ir, snap, site, pir)
+    loc = task_ir.locus(ir, snap, site, pir) if how in ("traceback", "literal", "qualname") else None
 
     rel = site["file"]
     fstart, fend = site.get("start_line", site["line"]), site["end_line"]
@@ -244,12 +259,7 @@ def locate(opt):
     if rb - ra + 1 > READ_MAX:  # keep the read inside fix_edit's numbered window
         ra, rb = (max(1, ea - 5), min(total or eb, max(1, ea - 5) + READ_MAX - 1))
 
-    def read(path):
-        return snap["files"].get(path, {}).get("content")
-    targets = [(rel, site.get("qualname", site["name"]))]
-    tests = [t["file"] for t in impact.rank_tests(ir, repo, targets, read)[:impact.MAX_TESTS]]
-    check = (f"python -m pytest {_test_node(tests[0], site['name'], read(tests[0]))} -q -x 2>&1 | tail -15"
-             if tests else f"python -c \"import ast,sys; ast.parse(open('{rel}').read())\"")
+    check = check_for_site(ir, snap, repo, site)
 
     qual = site.get("qualname", site["name"])
     lines = [f"edit {rel}:{_span(ea, eb)} {qual}  (anchor: {how}: {evidence})"]

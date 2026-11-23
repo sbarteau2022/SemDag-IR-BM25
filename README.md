@@ -103,3 +103,5 @@ The experimental v13 role-capability policy removes generic shell tools and regi
 Role-policy result: 272 host tests and actual SDK role/lifecycle fixtures pass. Both E4B development trials remained unresolved with empty patches; native tool protocol is still an unmet live gate. No promotion is established. See [role-policy findings](docs/runs/v13_ROLE_POLICY_2026-11-23.md).
 
 The v13 protocol investigation adds a compatible native grammar for the SDK’s concretely typed positional_args field and aligns skill discovery/loading with SDK instructions. Simple raw/chat probes pass; full-context generation still exhibits wrong-skill routing. Live milestone results remain separate from component proof.
+
+Recent v13 live execution exposed assignment/cache and compilation-context defects; repairs isolate per-assignment verification and preserve unchanged-candidate reassignment. 296 host tests pass. The newer source exceeds the native microbenchmark overhead gate (+15.44%); no performance promotion is claimed. Live workflow verification remains separate.

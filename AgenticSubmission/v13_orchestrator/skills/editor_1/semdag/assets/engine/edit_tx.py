@@ -70,6 +70,7 @@ def managed(repo):
     for p in home().glob('*/*.json'):
         s = json.loads(p.read_text())
         if s['workspace'] == root:
+            check_marker(s)
             return p, s
     if (Path(root) / '.v13-managed').exists():
         raise ValueError('managed slot metadata missing; prepare a fresh slot')
@@ -84,12 +85,19 @@ def load_handle(handle, repo=None, slot=None):
     s = json.loads(p.read_text())
     if s['handle'] != handle:
         raise ValueError('stale or already-used handle')
+    check_marker(s)
     if slot is not None and str(slot) != s['slot']:
         raise ValueError('cross-slot handle')
     actual = os.path.realpath(wsroot.workspace_root(repo))
     if actual not in (s['repo'], s['workspace']):
         raise ValueError('cross-task handle')
     return p, s
+
+
+def check_marker(s):
+    marker = Path(s['workspace']) / '.v13-managed'
+    if s['state'] in ('prepared', 'edited') and (not marker.is_file() or marker.read_text() != s['handle']):
+        raise ValueError('stale or lost transaction generation metadata')
 
 
 def check_deadline(s):
@@ -134,6 +142,7 @@ def tree(root):
 
 
 def check_versions(s):
+    check_marker(s)
     check_deadline(s)
     central = file_at(s['repo'], s['file'])
     target = file_at(s['workspace'], s['file'])
@@ -149,6 +158,7 @@ def issue_handle(p, s, span=None):
         s['view'] = span
     s['generation'] += 1
     s['handle'] = f'{p.parent.name}.{s["slot"]}.{uuid.uuid4().hex}'
+    atomic_source(Path(s['workspace']) / '.v13-managed', s['handle'].encode(), 0o600)
     save(p, s)
     return view_result(s)
 
@@ -188,7 +198,7 @@ def run_check(command, root, s):
             'output_truncated': length > 3000}
 
 
-def begin(repo, slot, rel, a, b, check, remaining, issue='', baseline=None):
+def begin(repo, slot, rel, a, b, check, remaining, issue='', baseline=None, container=None):
     import impact
     import workspace_mgr as wm
     repo = os.path.realpath(wsroot.workspace_root(repo))
@@ -205,19 +215,23 @@ def begin(repo, slot, rel, a, b, check, remaining, issue='', baseline=None):
         raise ValueError('verification command required')
     p = state_path(repo, slot)
     with locked(p):
-        if p.exists() and json.loads(p.read_text())['state'] not in ('applied', 'failed'):
-            raise ValueError('slot already has an active transaction')
+        if p.exists():
+            previous = json.loads(p.read_text())
+            if previous['state'] not in ('applied', 'failed'):
+                check_versions(previous)
+                if previous['slot_hash'] != previous['base_hash'] or tree(previous['workspace']) != previous['base_tree']:
+                    raise ValueError('slot has pending changes; cannot discard candidate')
         deadline = time.monotonic() + remaining
         original_tree = tree(repo)
         result = wm._spawn_copy(slot, rel, f'{a}-{b}', check, issue=issue, repo=repo)
         s = {'repo': repo, 'workspace': os.path.realpath(result['workspace']), 'slot': str(slot),
              'file': rel, 'allowed': [a, b], 'view': [a, b], 'base_hash': digest(source),
              'slot_hash': digest(source), 'base_tree': original_tree, 'generation': 0,
-             'state': 'prepared', 'check': check, 'deadline': deadline, 'baseline': baseline}
+             'state': 'prepared', 'check': check, 'deadline': deadline, 'baseline': baseline,
+             'container': container or ('tx_' + p.parent.name + '_' + digest(str(slot).encode())[:8] + '_' + uuid.uuid4().hex[:8])}
         if tree(repo) != original_tree or tree(s['workspace']) != original_tree:
             raise ValueError('source changed during workspace creation')
         check_deadline(s)
-        (Path(s['workspace']) / '.v13-managed').write_text('managed\n')
         out = issue_handle(p, s)
         # A managed assignment must not retain the legacy edit/check instructions.
         assignment = (f"# Managed editor assignment: slot {slot}\n\n"
@@ -240,22 +254,32 @@ def prepare(issue, remaining, repo=None, slot='1'):
     if not 0 < remaining <= 240:
         raise ValueError('remaining must be between 0 and 240')
     started = time.monotonic()
-    result = repo_eval.locate(repo_eval.parse_args(['--repo', wsroot.workspace_root(repo), issue]))
+    root = os.path.realpath(wsroot.workspace_root(repo))
+    container = 'tx_' + digest(os.fsencode(root))[:16] + '_' + digest(str(slot).encode())[:8] + '_' + uuid.uuid4().hex[:8]
+    result = repo_eval.locate(repo_eval.parse_args(['--container', container, '--repo', root, issue]))
     if result.get('error') or not result.get('text', '').startswith('edit '):
         raise ValueError('localization did not produce an edit assignment: ' + str(result)[:300])
-    assignment = cache.read('task', 'task_ir.json')
-    check = assignment['check']
-    s = {'deadline': started + remaining}
-    baseline = run_check(check, wsroot.workspace_root(repo), s)
-    ranked = cache.read('task', 'eval.json')['retrieval']['top']
+    assignment = cache.read(container, 'task_ir.json')
+    evaluation = cache.read(container, 'eval.json')
+    ranked = evaluation['retrieval']['top']
     alternatives = ranked[1:3] if assignment['anchor']['how'] == 'bm25' else []
     rel, a, b = assignment['edit']['file'], assignment['edit']['start'], assignment['edit']['end']
     if str(slot) == '2':
         if not alternatives:
             raise ValueError('no distinct alternative assigned to slot 2')
         alt = alternatives[0]
-        rel, a, b = alt['file'], alt['line'], alt['end_line']
-    result = begin(repo, slot, rel, a, b, check, check_deadline(s), issue, baseline)
+        ir = cache.read(container, 'semdag_ir.json')
+        snap = cache.read(container, 'snapshot.json')
+        site = next(n for n in ir['nodes'] if n['id'] == alt['id'])
+        rel, a, b = site['file'], site.get('start_line',site['line']), site['end_line']
+        assignment = {**assignment, 'anchor': {'file': rel, 'qualname': site.get('qualname',site['name']),
+                       'line':site['line'],'start':a,'end':b,'how':'bm25','evidence':'distinct alternative'},
+                      'edit': {'file':rel,'start':a,'end':b}, 'locus':None, 'read':[a,b],
+                      'check':repo_eval.check_for_site(ir,snap,root,site)}
+        cache.write(container,'task_ir.json',assignment)
+    check = assignment['check']
+    baseline = run_check(check, root, {'deadline': started + remaining})
+    result = begin(root, slot, rel, a, b, check, remaining-(time.monotonic()-started), issue, baseline, container)
     result['alternatives'] = alternatives
     result['anchor'] = assignment['anchor']['how']
     return result
@@ -293,8 +317,9 @@ def edit(handle, replacement, repo=None, slot=None):
             raise ValueError('no change')
         try:
             new_tree = ast.parse(candidate)
+            compile(new_tree, s["file"], "exec")
         except (SyntaxError, ValueError, RecursionError) as exc:
-            raise ValueError('replacement would break Python syntax') from exc
+            raise ValueError(f'replacement cannot compile at line {getattr(exc, "lineno", None)}: {getattr(exc, "msg", str(exc))}') from exc
         try:
             old_tree = ast.parse(text)
         except (SyntaxError, ValueError, RecursionError):
@@ -400,7 +425,7 @@ def finalize(handle, repo=None, slot=None):
         atomic_source(central, candidate, mode)
         try:
             checked = run_check(s['check'], s['repo'], s)
-            analysis = repo_eval.verify(repo_eval.parse_args(['--verify', '--repo', s['repo']]))
+            analysis = repo_eval.verify(repo_eval.parse_args(['--verify', '--container', s['container'], '--repo', s['repo']]))
             if checked['exit_code'] or not analysis.get('clean'):
                 raise ValueError('central verification failed: ' + str(checked)[:800] + str(analysis)[:800])
             check_deadline(s)

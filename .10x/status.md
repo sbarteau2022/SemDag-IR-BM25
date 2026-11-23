@@ -1,2 +1,2 @@
 # Status
-Protocol diagnosis and compatible typed-ABI/lifecycle repairs implemented. Raw/chat simple probes pass; full-context wrong-skill generation observed. Shorter external case excluded after reference failure. Full tests/official validation pass; SDK-aligned same-case E4B trial next. No success/promotion claimed.
+Live E4B now prepares slots and attempts managed edits; verification caught invalid Python. ADR-008 correctness repairs implemented and 296 tests pass. Latest native timing gate fails (+15.44%); no promotion. Final assignment-bound same-case smoke next.

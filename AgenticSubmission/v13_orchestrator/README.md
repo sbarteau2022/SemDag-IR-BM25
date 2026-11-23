@@ -62,3 +62,12 @@ Read-only probes found that the local CT and MLX templates match, and args.anyOf
 Discovery policy now aligns with the SDK's appended model-facing MUST-load instruction: root lists the registered skill inventory, loads its returned name, then budgets and prepares. Editors load their role skill. This is an instruction/lifecycle alignment, not a claim that the SDK enforces load-before-execute. Unprepared native status now gives root a prepare instruction and editors an EDIT_FAILED instruction.
 
 Exact request capture is optional host-only telemetry, mode 0600, bodies only/no headers; task/model bodies stay local. Only verified public parser/template research was ingested into the host Edge store, never task/code/model artifacts. Source manifests and raw receipts are under reports/v13_protocol_2026-11-23/.
+
+
+## Assignment-bound verification repair
+
+Preparations now have independent cache namespaces carried into finalization, including correct alternative-site checks/anchor metadata. A BM25 guess retains a whole-function scope; trusted exact anchors still receive loop-locus constraints. Root may replace only an unchanged prepared assignment; pending changes are preserved. Each issued handle is durably recorded in the workspace marker before atomic state replacement, preventing older metadata from reviving a revoked read-only view or assignment.
+
+Candidates are compiled without execution before writing, catching contextual syntax such as return/break outside a valid scope that ast.parse alone accepts. Editors should narrow to a complete changed block rather than replace a whole function with only its body.
+
+Regression suite: 296 passed. The latest fixed-source benchmark still reduces modeled control steps 9→4 with identical output, but native median overhead is +15.44%, exceeding the original 10% timing gate. That performance gate is not relaxed or claimed passed; these correctness repairs remain experimental pending live evidence and further measurement.

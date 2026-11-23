@@ -9,6 +9,11 @@ Gemma4 native status call:
 call:run_skill_script{skill_name:<|"|>semdag<|"|>,file_path:<|"|>scripts/run.py<|"|>,positional_args:[<|"|>status<|"|>]}
 The SDK inserts its -- separator; action names below have no hyphens. String delimiters already quote values, so do not embed JSON quote characters.
 
-Root positional forms: [prepare, WHOLE_ISSUE, REMAINING_SECONDS, SLOT]; [status, SLOT]; [finalize, HANDLE, SLOT]. All elements are strings. Prepare must succeed before dispatching an editor. Preserve the existing BM25-alternative second-editor and one-final-retry policy. Finalize performs outside and central checks; only ok true/state applied confirms application. Root cannot edit/view through editor actions.
+Root positional forms: [prepare, RETRIEVAL_QUERY, REMAINING_SECONDS, SLOT]; [status, SLOT]; [finalize, HANDLE, SLOT]. All elements are strings. Prepare must succeed before dispatching an editor. Preserve the existing BM25-alternative second-editor and one-final-retry policy. Finalize performs outside and central checks; only ok true/state applied confirms application. Root cannot edit/view through editor actions.
 
 Only run.py is an executable skill resource. Readable engine assets are not executable tool targets. Handles bind task, slot, file/span and source version. Wrong role, stale/cross-slot handle and malformed arity/type fail without mutation. Legacy explicit flag grammar remains for compatibility, but do not mix it with positional_args. Missing or wrong outer SDK fields are not repaired. E4B/budgets unchanged; this is not full host containment or automatic prevention of every premature dispatch/submit.
+
+The prepare text is a retrieval query, not a copy of the whole ticket. Include the title, exact error and relevant traceback/symbol names in a few sentences. Exclude conda/pip environment transcripts. Root still receives the unmodified full task and must judge the fix against it; no host truncation or rewriting is performed.
+
+
+Each preparation has independent cached source/anchor/check metadata. Verification uses that transaction's metadata. BM25 guesses retain the whole function rather than forcing a speculative loop line. Root can re-prepare an unchanged assignment with an evidence-backed narrower query; pending edits are never discarded. All prior handles are revoked by a durable generation marker. Editors should narrow to a complete statement/block before replacement and preserve function headers if replacing a whole function. Python compilation, not just AST parsing, must accept a candidate before any source write.

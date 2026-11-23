@@ -202,3 +202,75 @@ def test_fused_prepare_through_real_localizer_and_finalize(modules,repo):
     h=tx.edit(prepared['handle'],'def value():\n    return 2',str(repo),'1')['handle']
     assert tx.finalize(h,str(repo),'1')['ok']
     assert (repo/'sample.py').read_text()=='def value():\n    return 2\n'
+
+@pytest.mark.parametrize('replacement',['return 2','break','continue','yield 1','nonlocal missing'])
+def test_compile_context_errors_refused_before_slot_write(modules,repo,replacement):
+    tx,wm=modules
+    h=tx.begin(str(repo),'1','sample.py',1,2,'true',30)['handle']
+    before=(repo/'sample.py').read_bytes(),(Path(wm._ws_dir('1'))/'sample.py').read_bytes()
+    with pytest.raises(ValueError,match='cannot compile'):tx.edit(h,replacement,str(repo),'1')
+    assert before==((repo/'sample.py').read_bytes(),(Path(wm._ws_dir('1'))/'sample.py').read_bytes())
+
+
+def test_unmodified_reassignment_revokes_old_handles_and_metadata(modules,repo):
+    tx,wm=modules
+    (repo/'other.py').write_text('def other():\n    return 3\n')
+    first=begin(tx,repo);path,state=tx.load_handle(first['handle'],str(repo),'1');old=path.read_bytes()
+    second=tx.begin(str(repo),'1','other.py',1,2,'true',30)
+    assert second['file']=='other.py' and second['handle']!=first['handle']
+    with pytest.raises(ValueError):tx.edit(first['handle'],'    return 9',str(repo),'1')
+    current=path.read_bytes();path.write_bytes(old)
+    with pytest.raises(ValueError,match='generation'):tx.edit(first['handle'],'    return 9',str(repo),'1')
+    path.write_bytes(current)
+    third=tx.edit(second['handle'],'def other():\n    return 4',str(repo),'1')
+    before=(Path(wm._ws_dir('1'))/'other.py').read_bytes()
+    with pytest.raises(ValueError,match='pending changes'):begin(tx,repo)
+    assert (Path(wm._ws_dir('1'))/'other.py').read_bytes()==before
+    assert tx.load_handle(third['handle'],str(repo),'1')[1]['state']=='edited'
+
+
+def test_read_view_checkpoint_cannot_revoke_newer_generation(modules,repo):
+    tx,wm=modules;h=tx.begin(str(repo),'1','sample.py',1,2,'true',30)['handle']
+    path,state=tx.load_handle(h,str(repo),'1');old=path.read_bytes()
+    tx.narrow(h,2,2,str(repo),'1');path.write_bytes(old)
+    with pytest.raises(ValueError,match='generation'):tx.edit(h,'def value():\n    return 2',str(repo),'1')
+    assert (repo/'sample.py').read_text().endswith('return 1\n')
+
+
+def test_bm25_keeps_function_and_trusted_anchor_keeps_locus(modules,repo):
+    tx,wm=modules
+    content='def first_items():\n    """shared item"""\n    values = [item for item in range(2)]\n    return values\n'
+    (repo/'sample.py').write_text(content)
+    guessed=tx.prepare('shared item',30,str(repo),'1')
+    p,s=tx.load_handle(guessed['handle'],str(repo),'1');cache=importlib.import_module('cache')
+    guessed_ir=cache.read(s['container'],'task_ir.json')
+    assert guessed_ir['anchor']['how']=='bm25'
+    assert guessed_ir['locus'] is None and s['allowed']==[1,4]
+    exact=tx.prepare('sample.first_items item',30,str(repo),'1')
+    p,s=tx.load_handle(exact['handle'],str(repo),'1');exact_ir=cache.read(s['container'],'task_ir.json')
+    assert exact_ir['anchor']['how']=='qualname' and exact_ir['locus'] is not None
+    assert s['allowed']==[3,3]
+
+
+def test_slot_specific_cache_metadata_and_other_cache_poisoning(modules,repo):
+    tx,wm=modules
+    content='def first():\n    """shared item"""\n    values = [item for item in range(2)]\n    return values\n'
+    (repo/'sample.py').write_text(content)
+    (repo/'zeta.py').write_text(content.replace('first','second'))
+    for args in [['add','.'],['commit','-qm','two sites'],['tag','-f','_swegemma_baseline']]:
+        subprocess.run(['git',*args],cwd=repo,check=True,capture_output=True)
+    one=tx.prepare('shared item',30,str(repo),'1');two=tx.prepare('shared item',30,str(repo),'2')
+    _,s1=tx.load_handle(one['handle'],str(repo),'1');_,s2=tx.load_handle(two['handle'],str(repo),'2')
+    assert s1['container']!=s2['container'] and s1['file']!=s2['file']
+    cache=importlib.import_module('cache')
+    for state in [s1,s2]:
+        ir=cache.read(state['container'],'task_ir.json')
+        assert ir['edit']['file']==state['file'] and state['file'] in state['check']
+        assert ir['locus'] is None
+    poison={'edit':{'file':s1['file'],'start':999,'end':1000},'locus':{'kind':'for','file':s1['file'],'start':999,'end':1000,'carried':['item']}}
+    cache.write('task','task_ir.json',poison);cache.write(s2['container'],'task_ir.json',poison)
+    target=(Path(s1['workspace'])/s1['file']).read_text()
+    replacement=target.replace('range(2)','range(3)')
+    h=tx.edit(one['handle'],replacement,str(repo),'1')['handle']
+    assert tx.finalize(h,str(repo),'1')['ok']
+    assert 'range(3)' in (repo/s1['file']).read_text()
