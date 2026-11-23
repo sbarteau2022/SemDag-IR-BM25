@@ -1,6 +1,6 @@
 # SemDAG: graph-guided code localization for a small coding agent
 
-This repository is a solo entry in Kaggle's *Gemma 4 Developer Agent* competition. A 4B-parameter model, `gemma-4-e4b-it-qat-w4a16-ct`, has to resolve real GitHub issues inside a sandbox with a 5-minute budget per task. The work has two parts:
+This repository is a solo entry in Kaggle's *Gemma 4 Developer Agent* competition. A 4B-parameter model, `gemma-4-e4b-it-qat-w4a16-ct`, has to resolve real GitHub issues inside a sandbox with a 4-minute budget per task. The work has two parts:
 
 1. **SemDAG**, a typed graph IR of a Python repository plus a BM25-seeded walk. It ranks the functions an issue most likely touches. It is evaluated in a paper with a controlled retrieval study.
 2. **An agent line** (v0 to v9), packaged as offline ADK submissions. Each version is a separate, zippable folder, measured end to end on held-out tasks.
@@ -85,3 +85,10 @@ Add `--flow Class.method` to see the recurrent structure of one function. To rep
 Dynamic dispatch and runtime imports stay unresolved. End-to-end numbers come from a local Apple-silicon stand-in, not the scorer's 4×L4 vLLM. Local grading covers rich, requests and httpx only, because fastapi tasks fail on the arm64 image. No Kaggle submission has been made yet.
 
 Licensed under Apache 2.0; see [LICENSE](LICENSE).
+
+
+## v13 qualification
+
+The current candidate is `AgenticSubmission/v13_orchestrator`, tested with Gemma E4B only using macOS Seatbelt and the official subprocess backend, without Docker. Workspace hardlinks were found to mutate central and sibling files before apply; independent task-local copies now pass the isolation regressions. Editor roles retain the owner defaults of 16,384 output tokens and 4,096 thinking tokens.
+
+A repository-disjoint external Dask issue qualifies the grading path: an empty patch yields 2 failures / 43 passes, and the reference patch yields 45 passes. This establishes grading behavior for that issue, not generalization or a leaderboard score. Host component tests and model-run evidence are recorded in the local `reports/v13_qualification_2026-11-22/` directory. The qualification command is documented in [Tools/local/qualify_v13.py](Tools/local/qualify_v13.py).
