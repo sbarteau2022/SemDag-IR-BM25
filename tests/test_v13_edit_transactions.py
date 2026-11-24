@@ -331,3 +331,65 @@ def test_single_letter_prose_does_not_force_a_loop_locus(modules,repo):
     ready=tx.prepare('merge_items has a failure in `a`',30,str(repo),'1')
     _,state=tx.load_handle(ready['handle'],str(repo),'1')
     assert cache.read(state['container'],'task_ir.json')['locus'] is not None
+
+
+def test_verification_baseline_is_operation_local_and_worktree_stays_fresh(modules, repo, monkeypatch):
+    impact=importlib.import_module('impact');reval=importlib.import_module('repo_eval')
+    calls=[];real_git=impact._git
+    def observe(path,*args,**kwargs):
+        calls.append(args)
+        return real_git(path,*args,**kwargs)
+    monkeypatch.setattr(impact,'_git',observe)
+    opt=reval.parse_args(['--verify','--container','native_git_reads','--repo',str(repo)])
+    (repo/'sample.py').write_text('def value():\n    return 2\n')
+    first=reval.verify(opt)
+    assert first['clean'] and first['base']=='_swegemma_baseline'
+    assert sum(c[0]=='rev-parse' for c in calls)==1
+    assert sum(c[0]=='show' for c in calls)==1
+    (repo/'sample.py').write_text('def value():\n    return missing_native_name\n')
+    second=reval.verify(opt)
+    assert not second['clean'] and second['blocked'] and second['undefined_names']
+    # A later verification observes a moved baseline as well as the current tree.
+    (repo/'sample.py').write_text('def value():\n    return 2\n')
+    for args in [['add','sample.py'],['commit','-qm','new-base'],['tag','-f','_swegemma_baseline']]:
+        subprocess.run(['git',*args],cwd=repo,check=True,capture_output=True)
+    third=reval.verify(opt)
+    assert third['patch']['empty'] and third['blocked'] and not third['clean']
+
+
+def test_old_side_reads_use_immutable_commit_when_tag_moves(modules,repo,tmp_path):
+    impact=importlib.import_module('impact');reval=importlib.import_module('repo_eval')
+    baseline=impact.resolve_baseline(str(repo))
+    (repo/'sample.py').write_text('def value():\n    return 2\n')
+    for args in [['add','.'],['commit','-qm','later'],['tag','-f','_swegemma_baseline']]:
+        subprocess.run(['git',*args],cwd=repo,check=True,capture_output=True)
+    assert baseline.old_content('sample.py').endswith('return 1\n')
+    fixed=impact.analyze(str(repo),baseline=baseline)
+    assert not fixed['patch']['empty'] and fixed['changed_defs']
+    assert reval.old_hunks(str(repo),'sample.py',baseline=baseline)==[(2,2)]
+    assert impact.analyze(str(repo))['patch']['empty']
+    with pytest.raises(ValueError,match='another repository'):
+        impact.analyze(str(tmp_path),baseline=baseline)
+
+
+def test_shared_git_reads_preserve_destructive_and_protected_gates(modules,repo):
+    reval=importlib.import_module('repo_eval')
+    original='def value():\n'+''.join(f'    item_{i} = {i}\n' for i in range(60))+'    return 1\n'
+    (repo/'sample.py').write_text(original)
+    for args in [['add','.'],['commit','-qm','long-base'],['tag','-f','_swegemma_baseline']]:
+        subprocess.run(['git',*args],cwd=repo,check=True,capture_output=True)
+    (repo/'sample.py').write_text('def value():\n    return 2\n')
+    (repo/'test_untracked.py').write_text('raise RuntimeError("protected")\n')
+    result=reval.verify(reval.parse_args(['--verify','--container','destructive_git_reads','--repo',str(repo)]))
+    assert not result['clean'] and result['blocked'] and 'deletes' in result['next']
+    assert result['patch']['files']==['sample.py']
+    assert 'test_untracked.py' in result['patch']['stripped']
+
+
+def test_missing_git_baseline_retains_snapshot_fallback(modules,tmp_path):
+    impact=importlib.import_module('impact');cache=importlib.import_module('cache')
+    path=tmp_path/'plain';path.mkdir();source=path/'sample.py';source.write_text('def value():\n    return 1\n')
+    base={'sample.py':{'sha256':cache.sha256_file(source),'content':source.read_text()}}
+    source.write_text('def value():\n    return 2\n')
+    result=impact.analyze(str(path),base_files=base)
+    assert result['base']=='snapshot' and result['clean'] and result['patch']['files']==['sample.py']

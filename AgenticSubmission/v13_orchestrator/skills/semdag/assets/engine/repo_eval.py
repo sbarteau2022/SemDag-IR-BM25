@@ -342,9 +342,13 @@ def flow_mode(opt):
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@", re.M)
 
 
-def old_hunks(repo, rel):
+def old_hunks(repo, rel, baseline=impact.AUTO_BASELINE):
     """Baseline-side line ranges touched by the working-tree change of one file."""
-    ref = impact.baseline_ref(repo)
+    if baseline is impact.AUTO_BASELINE:
+        baseline = impact.resolve_baseline(repo)
+    if baseline is not None:
+        baseline.check_repo(repo)
+    ref = baseline.oid if baseline else None
     if not ref:
         return None
     rc, text = impact._git(repo, "diff", "-U0", "--no-color", ref, "--", rel)
@@ -357,9 +361,13 @@ def old_hunks(repo, rel):
     return out
 
 
-def destructive(repo, kept):
+def destructive(repo, kept, baseline=impact.AUTO_BASELINE):
     """Files whose change deletes most of the file: a whole-file rewrite, never a fix."""
-    ref = impact.baseline_ref(repo)
+    if baseline is impact.AUTO_BASELINE:
+        baseline = impact.resolve_baseline(repo)
+    if baseline is not None:
+        baseline.check_repo(repo)
+    ref = baseline.oid if baseline else None
     if not ref:
         return []
     rc, text = impact._git(repo, "diff", "--numstat", ref, "--", *kept) if kept else (1, "")
@@ -369,14 +377,14 @@ def destructive(repo, kept):
         if len(bits) != 3 or not bits[1].isdigit():
             continue
         deleted, rel = int(bits[1]), bits[2]
-        old = impact.old_content(repo, ref, rel)
+        old = baseline.old_content(rel)
         total = len(old.splitlines()) if old else 0
         if total and deleted >= max(DESTRUCTIVE_MIN, DESTRUCTIVE_SHARE * total):
             bad.append({"file": rel, "deleted": deleted, "of": total})
     return bad
 
 
-def gate(repo, cid, out):
+def gate(repo, cid, out, baseline=impact.AUTO_BASELINE):
     """v13: verify blocks empty patches, whole-file rewrites, undefined names, signature breaks, and missed loop loci."""
     if out.get("patch", {}).get("empty"):
         return ("blocked: patch is empty. Reproduce the failure first, then apply a minimal fix "
@@ -390,7 +398,7 @@ def gate(repo, cid, out):
         return (f"blocked: signature change on {sb.get('qualname')} breaks callers ({sb.get('reason')}). "
                 f"Restore the signature or update callers, then verify again.")
     kept = out.get("patch", {}).get("files", [])
-    for d in destructive(repo, kept):
+    for d in destructive(repo, kept, baseline=baseline):
         return (f"blocked: the patch deletes {d['deleted']} of {d['of']} lines of {d['file']}. "
                 f"Restore it with run_command `git checkout -- {d['file']}` and replace only the lines "
                 f"you need with fix_edit [\"{d['file']}\", \"L<a>-<b>\", new_text].")
@@ -402,7 +410,7 @@ def gate(repo, cid, out):
     if not loc:
         return None
     rel, a, b = loc["file"], loc["start"], loc["end"]
-    hunks = old_hunks(repo, rel) if rel in kept else []
+    hunks = old_hunks(repo, rel, baseline=baseline) if rel in kept else []
     if hunks is None:
         return None
     if any(h0 <= b and h1 >= a - 1 for h0, h1 in hunks):
@@ -422,7 +430,8 @@ def verify(opt):
         ir = cache.read(cid, "semdag_ir.json")
     except (OSError, ValueError):
         ir = None
-    has_git = impact.baseline_ref(repo) is not None
+    baseline = impact.resolve_baseline(repo)
+    has_git = baseline is not None
     if ir is None or not has_git:
         try:
             base_files = cache.read(cid, "snapshot.json")["files"]
@@ -434,9 +443,9 @@ def verify(opt):
             cache.init_container(cid, repo)
             snapshot.snapshot(cid, repo)
             ir = semdag_ir_ast.build(cid)
-    out = impact.analyze(repo, ir=ir, base_files=None if has_git else base_files)
+    out = impact.analyze(repo, ir=ir, base_files=None if has_git else base_files, baseline=baseline)
     if "patch" in out:
-        reason = gate(repo, cid, out)
+        reason = gate(repo, cid, out, baseline=baseline)
         if reason:
             out["blocked"] = True
             out["clean"] = False

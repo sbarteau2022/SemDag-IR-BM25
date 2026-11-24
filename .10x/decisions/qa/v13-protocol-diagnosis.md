@@ -1,0 +1,4 @@
+
+Prepared-owner source: all 313 host tests pass, official directory validator and asset equality/undefined-name lint pass. continuation_run full result is 241.75s timeout, 9 counted calls, 19 LLM calls, empty patch. Its editor accepted a private edit at 239s, so root-only analysis before the timeout was incomplete. No verified apply. Ownership parity trial is pending; initial plain-CLI launch interrupted/excluded to preserve parity.
+
+ownership_parity_run: 0/1, empty patch, timeout241.63s, 13 counted calls,20 LLM calls. Delegation followed preparation at109.2s; private compilable edit accepted222.7s, root status235.4s; no verified central apply. Four new real-Git regressions pass. Paired benchmark with tests/inference idle passes original gate (old0.155150500/new0.149583292, -3.59%, identical output); first benchmark overlapped unit tests and is excluded with a local note. Prior failed benchmark remains documented. Full suite and final-source smoke pending.

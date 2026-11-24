@@ -1,0 +1,4 @@
+
+Prepared ownership metadata grants no authority and no executable worker prompt. Root direct edits and premature finalization remain denied. Both editors were exposed in the live root menu. Raw captures remain local, omit headers and are created mode0600; no captures/task bodies are staged. Git optimization must scope immutable object reads to one operation and preserve fresh working-tree checks.
+
+ADR-014 review: shared reads use a resolved immutable commit ID, not a cached symbolic tag; contexts reject cross-repository reuse and are never persisted. Only successful old-object text is cached. Worktree/protected-file/destructive/locus/outside/central/version checks stay active. Tests cover moved tags and newly introduced undefined names across calls. Native optimization adds no commands, shell interpolation or model authority.

@@ -69,12 +69,39 @@ def _git(repo, *args, timeout=30):
         return 1, ""
 
 
-def baseline_ref(repo):
+AUTO_BASELINE = object()
+
+
+class GitBaseline:
+    """One verification's old-side reads, pinned to an immutable Git object."""
+    def __init__(self, repo, label, oid):
+        self.repo, self.label, self.oid = os.path.realpath(repo), label, oid
+        self._contents = {}
+
+    def check_repo(self, repo):
+        if os.path.realpath(repo) != self.repo:
+            raise ValueError("Git baseline belongs to another repository")
+
+    def old_content(self, rel):
+        if rel not in self._contents:
+            rc, text = _git(self.repo, "show", f"{self.oid}:{rel}")
+            if rc:
+                return None
+            self._contents[rel] = text
+        return self._contents[rel]
+
+
+def resolve_baseline(repo):
     for ref in BASELINE_REFS:
-        rc, _ = _git(repo, "rev-parse", "--verify", "--quiet", ref + "^{commit}")
-        if rc == 0:
-            return ref
+        rc, oid = _git(repo, "rev-parse", "--verify", "--quiet", ref + "^{commit}")
+        if rc == 0 and re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", oid.strip()):
+            return GitBaseline(repo, ref, oid.strip())
     return None
+
+
+def baseline_ref(repo):
+    baseline = resolve_baseline(repo)
+    return baseline.label if baseline else None
 
 
 def changed_paths(repo, ref):
@@ -456,13 +483,17 @@ def callers_of(ir, targets, limit=MAX_CALLERS):
 
 
 # ---------------------------------------------------------------- main analysis
-def analyze(repo, ir=None, base_files=None, read=None):
+def analyze(repo, ir=None, base_files=None, read=None, baseline=AUTO_BASELINE):
     """Full verdict for the working tree. ir: repository graph (baseline or current).
     base_files: cached snapshot files, used only when the workspace has no git history."""
-    ref = baseline_ref(repo)
+    if baseline is AUTO_BASELINE:
+        baseline = resolve_baseline(repo)
+    if baseline is not None:
+        baseline.check_repo(repo)
+    ref = baseline.oid if baseline else None
     if ref:
         paths = changed_paths(repo, ref)
-        base = ref
+        base = baseline.label
     elif base_files is not None:
         paths = changed_paths_from_snapshot(repo, base_files)
         base = "snapshot"
@@ -491,7 +522,7 @@ def analyze(repo, ir=None, base_files=None, read=None):
         if paths[rel] == "added":
             old_text = None
         elif ref:
-            old_text = old_content(repo, ref, rel)
+            old_text = baseline.old_content(rel)
         else:
             old_text = (base_files.get(rel) or {}).get("content")
         old_tree = _parse(old_text, rel)[0] if old_text is not None else None
