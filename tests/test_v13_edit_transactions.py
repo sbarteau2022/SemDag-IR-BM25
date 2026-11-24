@@ -393,3 +393,88 @@ def test_missing_git_baseline_retains_snapshot_fallback(modules,tmp_path):
     source.write_text('def value():\n    return 2\n')
     result=impact.analyze(str(path),base_files=base)
     assert result['base']=='snapshot' and result['clean'] and result['patch']['files']==['sample.py']
+
+
+@pytest.mark.parametrize('eol,bom',[(b'\n',b''),(b'\r\n',b''),(b'\n',b'\xef\xbb\xbf')])
+def test_exact_fragment_preserves_header_docstring_and_surrounding_bytes(modules,repo,eol,bom):
+    tx,wm=modules
+    text='def value():\n    """literal \\n, "quotes", λ\u2028content"""\n    result = 1\n    return result\n\ndef untouched():\n    return 9'
+    data=bom+text.encode().replace(b'\n',eol);(repo/'sample.py').write_bytes(data)
+    h=tx.begin(str(repo),'1','sample.py',1,4,'python -c "import sample; assert sample.value()==2"',60)['handle']
+    out=tx.replace_text(h,'result = 1','result = 2',str(repo),'1')
+    assert out['ok'] and out['edit_operation']=='exact_fragment'
+    assert Path(wm._ws_dir('1'),'sample.py').read_bytes()==data.replace(b'result = 1',b'result = 2',1)
+    assert (repo/'sample.py').read_bytes()==data
+    result=tx.finalize(out['handle'],str(repo),'1');assert result['ok'],result
+    assert (repo/'sample.py').read_bytes()==data.replace(b'result = 1',b'result = 2',1)
+
+
+@pytest.mark.parametrize('case',['missing','ambiguous','overlap','outside','stale','cross_slot','syntax','empty','long','too_many_lines'])
+def test_exact_fragment_failures_do_not_mutate_source_or_lease(modules,repo,case):
+    tx,wm=modules
+    source='def value():\n    text = "aaa"\n    result = 1 + 1\n    return result\n\ndef other():\n    return 7\n'
+    (repo/'sample.py').write_text(source)
+    h=tx.begin(str(repo),'1','sample.py',1,4,'python -c "import sample"',60)['handle']
+    old,new='result = 1 + 1','result = 2'
+    if case=='missing':old='not present'
+    if case=='ambiguous':old='1'
+    if case=='overlap':old='aa'
+    if case=='outside':old='return 7'
+    if case=='stale':tx.narrow(h,3,3,str(repo),'1')
+    if case=='syntax':new='result = ('
+    if case=='empty':old=''
+    if case=='long':old='x'*2049
+    if case=='too_many_lines':old='x\n'*17
+    slot=Path(wm._ws_dir('1'));before=(slot/'sample.py').read_bytes();manifest=tx.state_path(str(repo),'1').read_bytes()
+    with pytest.raises((ValueError,FileNotFoundError)):
+        tx.replace_text(h,old,new,str(repo),'2' if case=='cross_slot' else '1')
+    assert (slot/'sample.py').read_bytes()==before and (repo/'sample.py').read_text()==source
+    assert tx.state_path(str(repo),'1').read_bytes()==manifest
+
+
+def test_exact_fragment_intervening_view_is_not_silently_rebased(modules,repo,monkeypatch):
+    tx,_=modules;h=begin(tx,repo)['handle'];real_edit=tx.edit
+    def intervene(handle,replacement,*args):
+        tx.narrow(handle,2,2,str(repo),'1')
+        return real_edit(handle,replacement,*args)
+    monkeypatch.setattr(tx,'edit',intervene)
+    with pytest.raises(ValueError,match='stale'):
+        tx.replace_text(h,'return 1','return 2',str(repo),'1')
+    assert (repo/'sample.py').read_text()=='def value():\n    return 1\n'
+
+
+def test_exact_fragment_explicit_deletion_preserves_remaining_lines(modules,repo):
+    tx,wm=modules
+    source='def value():\n    unused = 1\n    return 2\n';(repo/'sample.py').write_text(source)
+    h=tx.begin(str(repo),'1','sample.py',1,3,'python -c "import sample; assert sample.value()==2"',60)['handle']
+    out=tx.replace_text(h,'    unused = 1\n','',str(repo),'1')
+    assert out['ok'] and Path(wm._ws_dir('1'),'sample.py').read_text()=='def value():\n    return 2\n'
+
+
+def test_real_retriever_header_loss_replay_and_exact_fragment_counterpart(modules,repo):
+    import ast
+    tx,wm=modules
+    original=(SCRIPTS/'retriever.py').read_text();(repo/'sample.py').unlink();(repo/'retriever.py').write_text(original)
+    for args in [['add','-A'],['commit','-qm','real-retriever'],['tag','-f','_swegemma_baseline']]:
+        subprocess.run(['git',*args],cwd=repo,check=True,capture_output=True)
+    node=next(n for n in ast.parse(original).body if isinstance(n,ast.FunctionDef) and n.name=='_documents')
+    check='python -c "import retriever; assert callable(retriever._documents); assert retriever.tokens(\'CamelCase\')==[\'camelcase\',\'camel\',\'case\']"'
+    bad=tx.begin(str(repo),'1','retriever.py',node.lineno,node.end_lineno,check,60)
+    body_only=tx.edit(bad['handle'],'    return list(docs)',str(repo),'1')
+    assert body_only['ok']  # Reproduces the old compiled-but-missing-definition failure.
+    failed=tx.finalize(body_only['handle'],str(repo),'1')
+    assert not failed['ok'] and 'outside verification' in failed['error']
+    assert (repo/'retriever.py').read_text()==original
+    good=tx.begin(str(repo),'2','retriever.py',node.lineno,node.end_lineno,check,60)
+    changed=tx.replace_text(good['handle'],'return docs','return list(docs)',str(repo),'2')
+    expected=original.replace('return docs','return list(docs)',1)
+    assert Path(wm._ws_dir('2'),'retriever.py').read_text()==expected
+    assert tx.finalize(changed['handle'],str(repo),'2')['ok']
+    assert (repo/'retriever.py').read_text()==expected
+
+
+def test_ast_analysis_accepts_only_one_leading_encoding_marker(modules):
+    impact=importlib.import_module('impact')
+    assert impact._parse('\ufeffx=1','bom.py')[1] is None
+    assert impact._parse('\ufeff\ufeffx=1','double.py')[1] is not None
+    assert impact._parse('x=1\n\ufeffy=2','embedded.py')[1] is not None

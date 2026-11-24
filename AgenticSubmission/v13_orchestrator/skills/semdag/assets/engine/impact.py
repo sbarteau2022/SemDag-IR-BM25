@@ -157,6 +157,10 @@ def changed_paths_from_snapshot(repo, base_files):
 
 # ---------------------------------------------------------------- AST facts
 def _parse(text, rel):
+    # CPython accepts a single UTF-8 BOM in source bytes; preserve file bytes,
+    # but omit the decoded encoding marker from AST analysis.
+    if text is not None:
+        text = text.removeprefix('\ufeff')
     try:
         return ast.parse(text, filename=rel), None
     except SyntaxError as ex:

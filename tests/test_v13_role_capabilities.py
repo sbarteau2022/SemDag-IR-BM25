@@ -99,7 +99,7 @@ def test_compiled_roles_have_no_shell_or_raw_edit_tools(compiled):
         assert ('submit_patch' in names)==(role=='root')
         skills=toolset(agent)._skills
         assert set(skills)=={'semdag'}
-        assert set(skills['semdag'].resources.list_scripts())==({'run.py','finalize.py'} if role=='root' else {'run.py'})
+        assert set(skills['semdag'].resources.list_scripts())==({'run.py','finalize.py'} if role=='root' else {'run.py','replace.py'})
     entries=[toolset(a)._skills['semdag'].resources.get_script('run.py').src for a in roles.values()]
     assert len(set(entries))==3
 
@@ -332,3 +332,38 @@ def test_role_engines_are_identical_and_only_entries_differ():
     for folder in ['editor_1/semdag','editor_2/semdag']:
         other=SUB/'skills'/folder/'assets/engine'
         assert {p.name:p.read_bytes() for p in root.glob('*.py')}=={p.name:p.read_bytes() for p in other.glob('*.py')}
+
+
+def exact_call(roles,role,values):
+    return invoke(roles,role,[],raw={'skill_name':'semdag','file_path':'scripts/replace.py','positional_args':values})
+
+
+@pytest.mark.parametrize('slot',['1','2'])
+def test_sdk_exact_fragment_preserves_source_and_verifies_both_slots(tmp_path,slot):
+    source='def first_items():\n    """shared signal and quoted documentation"""\n    return 1\n\ndef second_items():\n    """shared signal and quoted documentation"""\n    return 3\n'
+    manager,roles=build_compiled(tmp_path,source)
+    try:
+        ready=payload(positional(roles,'root',['prepare','shared signal',slot]));assert ready['ok'],ready
+        own=payload(positional(roles,'editor_'+slot,['status']))
+        request=own['replace_execution'];assert request['file_path']=='scripts/replace.py'
+        old,new=('return 1','return 2') if slot=='1' else ('return 3','return 4')
+        denied=exact_call(roles,'root',[own['handle'],old,new]);assert denied['error_code']=='SCRIPT_NOT_FOUND'
+        sibling=payload(exact_call(roles,'editor_'+('2' if slot=='1' else '1'),[own['handle'],old,new]))
+        assert not sibling['ok'] and 'cross-slot' in sibling['error']
+        request['positional_args'] += [old,new]
+        changed=payload(invoke(roles,'editor_'+slot,[],raw=request));assert changed['ok'],changed
+        assert manager.read_file('sample.py')==source
+        state=payload(positional(roles,'root',['status',slot]))
+        applied=payload(invoke(roles,'root',[],raw=state['next_execution']));assert applied['ok'],applied
+        assert manager.read_file('sample.py')==source.replace(old,new,1)
+        stale=payload(exact_call(roles,'editor_'+slot,[own['handle'],old,new]));assert not stale['ok']
+    finally:
+        manager.cleanup_all()
+
+
+def test_sdk_exact_fragment_arity_and_required_fields_remain_explicit(compiled):
+    _,roles=compiled
+    for values in [[],['unknown'],['unknown','old'],['--role','root','new']]:
+        out=payload(exact_call(roles,'editor_1',values));assert not out['ok']
+    out=invoke(roles,'editor_1',[],raw={'file_path':'scripts/replace.py','positional_args':['h','old','new']})
+    assert out['error_code']=='INVALID_ARGUMENTS'

@@ -267,7 +267,7 @@ def begin(repo, slot, rel, a, b, check, remaining, issue='', baseline=None, cont
                       f"Handle: {s['handle']}\n\nIssue: {issue}\n\n"
                       f"Numbered view:\n{out['text']}\n\n"
                       "Use run_skill_script with skill_name semdag, file_path scripts/run.py, "
-                      "and positional_args formed from edit_prefix plus each replacement code line. "
+                      "to read status/view; edit with scripts/replace.py using replace_execution plus one exact old fragment and replacement lines. "
                       "All positional arguments are strings. Use positional_args [view, START_LINE, END_LINE] to narrow a truncated view. "
                       "Return EDIT_READY with the new handle after edit success. "
                       "Outside tests and finalization belong to the orchestrator. "
@@ -339,6 +339,30 @@ def read_context(handle,a,b,repo=None,slot=None):
                 "lines":f"{a}-{end}","total_lines":len(lines),"allowed_edit_lines":f"{s['allowed'][0]}-{s['allowed'][1]}",
                 "text":shown[:6000],"text_truncated":end<b or len(shown)>6000,
                 "next":"Context only; no write lease. Narrow wholly within allowed_edit_lines for a write handle. If the fix is elsewhere, return EDIT_FAILED with the exact target so root can reprepare."}
+
+
+def replace_text(handle, old, replacement, repo=None, slot=None):
+    """Splice one explicit literal fragment; existing edit rechecks under its lock."""
+    if not isinstance(old, str) or not isinstance(replacement, str):
+        raise ValueError('old and replacement must be strings')
+    if not old or len(old) > 2048 or len(physical_lines(old)) > 16:
+        raise ValueError('exact old fragment must be nonempty, at most 16 lines and 2048 characters')
+    _, s = load_handle(handle, repo, slot)
+    _, target = check_versions(s)
+    text, _, _ = decode(target.read_bytes())
+    a, b = s['view']
+    view = '\n'.join(physical_lines(text)[a-1:b])
+    first = view.find(old)
+    multiple = first >= 0 and view.find(old, first+1) >= 0
+    if first < 0 or multiple:
+        count = 'multiple' if multiple else 'zero'
+        raise ValueError(f'exact old fragment has {count} matches in the current view; supply one exact fragment or narrow the view. Nothing was written.')
+    replacement_view = view.replace(old, replacement, 1)
+    # edit reloads the handle and validates source versions under the write lock.
+    # Any intervening view/edit invalidates the handle; no inferred rebase occurs.
+    out = edit(handle, replacement_view, repo, slot)
+    out['edit_operation'] = 'exact_fragment'
+    return out
 
 
 def edit(handle, replacement, repo=None, slot=None):

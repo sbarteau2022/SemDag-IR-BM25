@@ -177,7 +177,8 @@ def emit(role,out):
             out["next_tool_arguments"]={}
     if role == "editor" and out.get("ok") and out.get("handle"):
         out["edit_prefix"]=["edit_lines",out["handle"]]
-        out["edit_contract"]="Append replacement code as separate array elements, preserving spaces; never pack commas. Use the new handle after view."
+        out["replace_execution"]={"skill_name":"semdag","file_path":"scripts/replace.py","positional_args":[out["handle"]]}
+        out["edit_contract"]="Use replace_execution, appending EXACT_OLD_TEXT then replacement code lines. One literal match in this view is required. Surrounding code is preserved. Keep indentation exactly; no escaping or automatic indentation. edit_prefix is the legacy whole-view replacement form."
     header = dict(out)
     source = header.pop("text", None) if header.get("ok") and "text" in header else None
     if source is not None:
@@ -214,3 +215,19 @@ def finalize_main(argv=None):
     except Exception as exc:
         out={"ok":False,"error":f"{type(exc).__name__}: {exc}"[:1800]}
     return emit("root",out)
+
+
+def replace_main(bound_slot, argv=None):
+    """Editor-only explicit literal splice. Role/slot are never model arguments."""
+    try:
+        if bound_slot not in ("1","2"):
+            raise PermissionError("invalid static editor slot")
+        values=list(sys.argv[1:] if argv is None else argv)
+        if values and values[0]=="--":values=values[1:]
+        if len(values)<3:
+            raise ValueError("replace.py requires HANDLE, EXACT_OLD_TEXT, then replacement code lines; no action verb")
+        repo=os.path.realpath(wsroot.workspace_root())
+        out=tx.replace_text(values[0],values[1],"\n".join(values[2:]),repo,bound_slot)
+    except Exception as exc:
+        out={"ok":False,"error":f"{type(exc).__name__}: {exc}"[:1800]}
+    return emit("editor",out)
