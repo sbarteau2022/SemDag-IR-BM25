@@ -10,7 +10,7 @@ The unchanged full external Dask task now completes **autonomous prepare -> edit
 
 Native exact-path seven-pair timing fails the original <=10% overhead gate:0.184782291->0.219495708s(+18.79%), same output, modeled controls9->4. Do not substitute the earlier whole-view3.59% timing result or relax the threshold. Next work: causal fix selection, edit-path timing and broader policy qualification. No numerical dispatch reserve is established by these component timings.
 
-Read [current exact-edit report](runs/v13_EXACT_EDITS_2026-11-24.md) and ADR-015. Raw artifacts stay local under reports/v13_exact_edits_2026-11-24. No task/model material entered research memory. Experimental branch v13-exact-edits will fast-forward to main after final receipts.
+Read [current exact-edit report](runs/v13_EXACT_EDITS_2026-11-24.md) and ADR-015. Raw artifacts stay local under reports/v13_exact_edits_2026-11-24. No task/model material entered research memory. The reviewed experimental source and evidence are published on main at `698d264`; owned E4B/proxy services are stopped.
 
 ## Goal
 
