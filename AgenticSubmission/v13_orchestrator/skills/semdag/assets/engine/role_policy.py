@@ -47,7 +47,7 @@ def dispatch(role, bound_slot, argv):
             elif values[0].startswith(("edit,", "edit_lines,")):
                 raise ValueError("comma-packed writes are ambiguous; supply separate positional_args elements: edit_lines, HANDLE, each code line")
         action = values[0]
-        arities = {"prepare": (3, 4), "edit": (3, 4), "view": (2, 3), "finalize": (3,), "status": (1, 2)}
+        arities = {"prepare": (3, 4), "edit": (3, 4), "view": (2, 3, 4), "finalize": (3,), "status": (1, 2)}
         if action == "edit_lines":
             if len(values) < 3:
                 raise ValueError("edit_lines requires a handle and explicit replacement lines")
@@ -62,7 +62,11 @@ def dispatch(role, bound_slot, argv):
         elif action == "edit":
             fields.update(edit=values[1], text=values[-1], expected_view=values[2] if len(values)==4 else None)
         elif action == "view":
-            if len(values)==2:
+            if len(values)==4:
+                if not values[2].isdigit() or not values[3].isdigit():
+                    raise ValueError("explicit view bounds must be numeric")
+                fields.update(view=values[1],lines=values[2]+"-"+values[3])
+            elif len(values)==2:
                 fields.update(view="current", lines=values[1], current_view=True)
             elif values[1].isdigit() and values[2].isdigit():
                 fields.update(view="current", lines=values[1]+"-"+values[2], current_view=True)
@@ -146,7 +150,10 @@ def dispatch(role, bound_slot, argv):
             raise ValueError("no active readable assignment")
         tx.check_versions(state)
         handle=state["handle"]
-    return tx.narrow(handle,a,b,repo,slot)
+    _,state=tx.load_handle(handle,repo,slot)
+    if state["allowed"][0] <= a <= b <= state["allowed"][1]:
+        return tx.narrow(handle,a,b,repo,slot)
+    return tx.read_context(handle,a,b,repo,slot)
 
 
 def main(role, bound_slot=None, argv=None):
@@ -158,7 +165,7 @@ def main(role, bound_slot=None, argv=None):
         out["edit_prefix"]=["edit_lines",out["handle"]]
         out["edit_contract"]="Append replacement code as separate array elements, preserving spaces; never pack commas. Use the new handle after view."
     header = dict(out)
-    source = header.pop("text", None) if header.get("ok") and header.get("handle") else None
+    source = header.pop("text", None) if header.get("ok") and "text" in header else None
     if source is not None:
         header["source_format"] = "numbered-python-v1"
     stream = sys.stdout if header.get("ok") else sys.stderr

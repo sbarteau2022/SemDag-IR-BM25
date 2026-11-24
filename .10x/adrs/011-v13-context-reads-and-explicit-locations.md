@@ -1,0 +1,11 @@
+# ADR-011: Separate context reads from write leases; parse explicit locations
+
+Status: Accepted as a native context/localization repair within owner-authorized workflow work. No new outer SDK/harness tool, model or write authority.
+
+Observed: root sends dask/config.py with lines 91/123/399/653, while the free-text matcher picks refresh at 475-524. Editors repeatedly ask to read the actual failure region 80-110 and are denied because read bounds were conflated with editable assignment bounds. No callback registry/per-AgentTool limit is provided by the scorer interface; native stderr cannot forcibly stop a child model loop. Do not claim otherwise.
+
+Decision: editor view may read bounded context in its own assigned file/private slot, never choose another file or slot. A context view outside editable bounds returns read_only=true and no handle/edit prefix; it does not change the write lease. In-scope narrow still issues a versioned handle. Writes remain hash/role/span/compile/verification guarded. Root remains forbidden from editor view actions. Source header exposes total physical lines. Outside-file/traversal/cross-slot reads fail.
+
+Task IR recognizes a single explicit file.py:line or file.py line N location and module-qualified global functions, in addition to existing traceback/class-method forms. Do not guess an innermost frame from an unordered line list: reject ambiguous lists unless a complete traceback is provided, and ask root to select the innermost exact location from the original issue. Per-location confidence is explicit. Single-letter prose such as article a is not evidence to force a loop locus unless the identifier appears in code spans/dotted code references. Trusted supported identifiers still retain locus constraints.
+
+Gates: actual SDK context reads yield real source but no new write handle; an attempted ranged edit of read-only context fails; existing slot/role/path/marker guards hold. Exact location/module joins disambiguate same-name functions; ambiguous lists fail without preparing. Full suite/official validation then unchanged-case E4B run. Original issue/test patch and all evaluation gates remain unchanged; no score promotion from context fixtures.

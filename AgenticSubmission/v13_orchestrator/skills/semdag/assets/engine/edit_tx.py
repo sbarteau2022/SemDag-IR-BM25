@@ -175,7 +175,7 @@ def view_result(s):
     a, b = s['view']
     shown = '\n'.join(f'{i}: {line}' for i, line in enumerate(physical_lines(text)[a-1:b], a))
     return {'ok': True, 'slot': s['slot'], 'handle': s['handle'], 'generation': s['generation'],
-            'file': s['file'], 'lines': f'{a}-{b}', 'text': shown[:6000],
+            'file': s['file'], 'lines': f'{a}-{b}', 'total_lines': len(physical_lines(text)), 'text': shown[:6000],
             'text_truncated': len(shown) > 6000, 'baseline': s.get('baseline'),
             'remaining_seconds': round(max(0, s['deadline'] - time.monotonic()), 2)}
 
@@ -322,6 +322,24 @@ def narrow(handle, a, b, repo=None, slot=None):
         return issue_handle(p, s, [a, b])
 
 
+def read_context(handle,a,b,repo=None,slot=None):
+    """Read context in the same private assigned file, without issuing a write lease."""
+    p,_ = load_handle(handle,repo,slot)
+    with locked(p):
+        _,s = load_handle(handle,repo,slot)
+        _,target = check_versions(s)
+        text,_,_ = decode(target.read_bytes())
+        lines = physical_lines(text)
+        if not 1 <= a <= b <= len(lines):
+            raise ValueError(f"read range outside file (1-{len(lines)})")
+        end = min(b,a+149)
+        shown = "\n".join(f"{i}: {line}" for i,line in enumerate(lines[a-1:end],a))
+        return {"ok":True,"read_only":True,"slot":s["slot"],"file":s["file"],
+                "lines":f"{a}-{end}","total_lines":len(lines),"allowed_edit_lines":f"{s['allowed'][0]}-{s['allowed'][1]}",
+                "text":shown[:6000],"text_truncated":end<b or len(shown)>6000,
+                "next":"Context only; no write lease. Narrow wholly within allowed_edit_lines for a write handle. If the fix is elsewhere, return EDIT_FAILED with the exact target so root can reprepare."}
+
+
 def edit(handle, replacement, repo=None, slot=None):
     import fix_edit
     p, _ = load_handle(handle, repo, slot)
@@ -346,7 +364,7 @@ def edit(handle, replacement, repo=None, slot=None):
             new_tree = ast.parse(candidate)
             compile(new_tree, s["file"], "exec")
         except (SyntaxError, ValueError, RecursionError) as exc:
-            raise ValueError(f'replacement cannot compile at line {getattr(exc, "lineno", None)}: {getattr(exc, "msg", str(exc))}') from exc
+            raise ValueError(f'replacement cannot compile at line {getattr(exc, "lineno", None)}: {getattr(exc, "msg", str(exc))}. Code chunks are raw Python, not JSON-escaped strings; fix the supplied text. Nothing was written.') from exc
         try:
             old_tree = ast.parse(text)
         except (SyntaxError, ValueError, RecursionError):

@@ -300,3 +300,34 @@ def test_unicode_separators_are_not_python_source_line_boundaries(modules,repo):
     assert out['ok']
     assert (Path(wm._ws_dir('1'))/'sample.py').read_text()=='def value():\n    return "x\u2028y\u2029z"\n'
     assert tx.finalize(out['handle'],str(repo),'1')['ok']
+
+
+def test_explicit_location_and_module_global_disambiguate(modules,repo):
+    tx,wm=modules
+    (repo/'other.py').write_text('def value():\n    return 9\n')
+    for args in [['add','.'],['commit','-qm','two modules'],['tag','-f','_swegemma_baseline']]:
+        subprocess.run(['git',*args],cwd=repo,check=True,capture_output=True)
+    ready=tx.prepare('other.py:2 wrong return',30,str(repo),'1')
+    _,state=tx.load_handle(ready['handle'],str(repo),'1')
+    assert ready['anchor']=='location' and state['file']=='other.py'
+    ready=tx.prepare('sample.value wrong return',30,str(repo),'1')
+    _,state=tx.load_handle(ready['handle'],str(repo),'1')
+    assert ready['anchor']=='qualname' and state['file']=='sample.py'
+
+
+def test_ambiguous_location_list_fails_without_preparation(modules,repo):
+    tx,wm=modules
+    with pytest.raises(ValueError,match='ambiguous'):
+        tx.prepare('sample.py lines 1, 2 fail',30,str(repo),'1')
+    assert not tx.state_path(str(repo),'1').exists()
+
+
+def test_single_letter_prose_does_not_force_a_loop_locus(modules,repo):
+    tx,wm=modules
+    (repo/'sample.py').write_text('def merge_items():\n    a = []\n    for item in range(2):\n        a.append(item)\n    return a\n')
+    ready=tx.prepare('merge_items has a failure',30,str(repo),'1')
+    _,state=tx.load_handle(ready['handle'],str(repo),'1');cache=importlib.import_module('cache')
+    assert cache.read(state['container'],'task_ir.json')['locus'] is None
+    ready=tx.prepare('merge_items has a failure in `a`',30,str(repo),'1')
+    _,state=tx.load_handle(ready['handle'],str(repo),'1')
+    assert cache.read(state['container'],'task_ir.json')['locus'] is not None

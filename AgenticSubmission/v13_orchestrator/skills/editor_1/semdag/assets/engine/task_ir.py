@@ -23,6 +23,8 @@ import retriever
 
 FRAME = re.compile(r'File "([^"\n]+?)", line (\d+), in ([A-Za-z_<][\w<>.]*)')
 PATH = re.compile(r"(?<![\w/.-])((?:[\w.-]+/)*[\w.-]+\.py)\b")
+INLINE_LOCATION = re.compile(r"(?<![\w/.-])(/?(?:[\w.-]+/)*[\w.-]+\.py)\s*(?::\s*|\s+line\s+)(\d+)\b")
+AMBIGUOUS_LINES = re.compile(r"(/?(?:[\w.-]+/)*[\w.-]+\.py)\s+lines\s+\d+\s*,\s*\d+")
 DOTTED = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\b")
 IDENT = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*\b")
 QUOTED = re.compile(r"""(?<![A-Za-z0-9_])(?:"([^"\n]{4,160})"|'([^'\n]{4,160})')""")
@@ -42,6 +44,7 @@ def _distinctive(name):
 def problem_ir(issue):
     text = issue or ""
     frames = [{"path": p, "line": int(n), "qual": q} for p, n, q in FRAME.findall(text)]
+    locations = [{"path": p, "line": int(n)} for p,n in INLINE_LOCATION.findall(text)]
     paths = sorted({p for p in PATH.findall(text) if not p.startswith(".")})
     literals = []
     for m in QUOTED.finditer(text):
@@ -60,7 +63,7 @@ def problem_ir(issue):
     dotted = sorted(set(DOTTED.findall(text)) - {p[:-3].replace("/", ".") for p in paths})
     code = [c.strip() for c in CODE_SPAN.findall(text)]
     idents = sorted(set(IDENT.findall(text)))
-    return {"idents": idents, "dotted": dotted, "code_spans": code, "frames": frames,
+    return {"idents": idents, "locations": locations, "dotted": dotted, "code_spans": code, "frames": frames,
             "literals": lits[:MAX_LITERALS], "paths": paths}
 
 
@@ -115,6 +118,14 @@ def anchor(ir, snap, pir, bm_scores):
             if n:
                 return n, "traceback", f'{rel}:{fr["line"]} in {fr["qual"]}'
 
+    locations = {(p["path"],p["line"]) for p in pir.get("locations",[])}
+    if len(locations) == 1:
+        path,line = next(iter(locations))
+        rel = _match_file(path,files)
+        n = _innermost(funcs,rel,line) if rel else None
+        if n:
+            return n,"location",f"{rel}:{line}"
+
     # 2. a literal that occurs in exactly one library function
     for lit in pir["literals"]:
         holders = []
@@ -134,6 +145,13 @@ def anchor(ir, snap, pir, bm_scores):
         by_name.setdefault(n["name"], []).append(n)
     for d in sorted(pir["dotted"], key=lambda x: (-x.count("."), x)):
         parts = d.split(".")
+        # Module-qualified globals and class methods are joined to their actual file.
+        for cut in reversed(range(1,len(parts))):
+            rel = _match_file("/".join(parts[:cut])+".py",files)
+            q = ".".join(parts[cut:])
+            cands = [n for n in by_qual.get(q,[]) if n["file"]==rel] if rel else []
+            if cands:
+                return min(cands,key=lambda n:_key(n,bm_scores)),"qualname",d
         for cut in range(len(parts)):  # pkg.mod.Class.method -> Class.method -> method
             q = ".".join(parts[cut:])
             cands = by_qual.get(q) if "." in q else None
@@ -189,7 +207,8 @@ def _pre_loop_inits(snap, fn, loop, names):
 
 def locus(ir, snap, site, pir):
     """Loop locus of the anchor, or None. The intersection uses exact identifiers only."""
-    words = set(pir["idents"])
+    explicit = {i for span in pir.get("code_spans",[]) + pir.get("dotted",[]) for i in IDENT.findall(span)}
+    words = {i for i in pir["idents"] if len(i)>1 or i in explicit}
     loops = [n for n in ir["nodes"] if n["kind"] == "loop" and n.get("owner") == site["id"]]
     best = None
     for lp in loops:

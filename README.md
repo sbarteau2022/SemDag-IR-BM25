@@ -109,3 +109,5 @@ Recent v13 live execution exposed assignment/cache and compilation-context defec
 v13’s native controller now owns conservative task-clock calculation and accepts explicit line-array edits, removing model-side clock copying and ambiguous write packets. Live workflow evidence remains the qualification gate; failed trials and the native overhead-gate failure are retained.
 
 v13 source views now use a metadata header plus raw numbered Python, avoiding nested JSON source escaping. Native failures return nonzero/error status. This remains experimental until the unchanged-task E4B workflow and grader demonstrate success.
+
+v13 now separates private-file context reads from write leases and parses exact source addresses/module-qualified globals. These are native context/localization repairs; successful live workflow and task-resolution evidence remain separate from component tests.

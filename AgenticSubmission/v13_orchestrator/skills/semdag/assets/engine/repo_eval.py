@@ -218,6 +218,10 @@ def locate(opt):
         return {"error": "no issue text was passed", "hint": USAGE}
     if not os.path.isdir(repo):
         return {"error": f"repository directory not found: {repo}", "hint": USAGE}
+    parsed_issue = task_ir.problem_ir(issue)
+    locations = {(x["path"],x["line"]) for x in parsed_issue.get("locations",[])}
+    if not parsed_issue["frames"] and (task_ir.AMBIGUOUS_LINES.search(issue) or len(locations)>1):
+        return {"error":"ambiguous location list", "hint":"Use a single innermost file.py:line address or exact module-qualified symbol from the original issue; do not sort/list stack line numbers."}
 
     cache.init_container(cid, repo)
     snap = snapshot.snapshot(cid, repo)
@@ -244,7 +248,7 @@ def locate(opt):
             return {"mode": "locate", "text": out_text}
         site, how, evidence = nodes[ranked["top"][0]["id"]], "bm25", "rank 1, a guess"
         alts = [s for s in ranked["top"][1:3]]
-    loc = task_ir.locus(ir, snap, site, pir) if how in ("traceback", "literal", "qualname") else None
+    loc = task_ir.locus(ir, snap, site, pir) if how in ("traceback", "location", "literal", "qualname") else None
 
     rel = site["file"]
     fstart, fend = site.get("start_line", site["line"]), site["end_line"]

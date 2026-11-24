@@ -17,18 +17,17 @@ def submit_patch() -> str:
     return 'component submit'
 
 
-@pytest.fixture(scope='module')
-def compiled(tmp_path_factory):
+def build_compiled(base,source='def value():\n    return 1\n'):
     from adk_submission import compile_submission, ModelRegistry, ToolRegistry
     from google.adk.models.lite_llm import LiteLlm
     from swegemma.sandbox import AdkSandboxCodeExecutor
     from swegemma.sandbox.subprocess import SubprocessManager
     from swegemma.harness.container_setup import setup_git_exclude
-    base=tmp_path_factory.mktemp('role-sdk')
+    base=base
     physical=base/'physical';physical.mkdir()
     alias=base/'alias';alias.symlink_to(physical,target_is_directory=True)
     manager=SubprocessManager(base_dir=alias)
-    manager.initialize({'sample.py':'def value():\n    return 1\n'})
+    manager.initialize({'sample.py':source})
     for command in ['git init -q','git config user.email component@example.invalid',
                     'git config user.name component','git add sample.py','git commit -qm base',
                     'git tag _swegemma_baseline']:
@@ -41,9 +40,14 @@ def compiled(tmp_path_factory):
     agent=compile_submission(SUB,tools,models,code_executor=executor)
     roles={'root':agent}
     roles.update({t.name:t.agent for t in agent.tools if hasattr(t,'agent')})
+    return manager,roles
+
+
+@pytest.fixture(scope='module')
+def compiled(tmp_path_factory):
+    manager,roles=build_compiled(tmp_path_factory.mktemp('role-sdk'))
     yield manager,roles
     manager.cleanup_all()
-
 
 def toolset(agent):
     from google.adk.tools.skill_toolset import SkillToolset
@@ -254,6 +258,27 @@ def test_actual_sdk_positional_lifecycle(compiled):
     applied=payload(positional(roles,'root',['finalize',edited['handle'],'1']))
     assert applied['ok'] and applied['state']=='applied',applied
     assert manager.read_file('sample.py')=='def value():\n    result = 11\n    return result\n'
+
+
+def test_actual_sdk_context_read_never_grants_an_outside_write_lease(tmp_path):
+    source='def value():\n    return 1\n\ndef helper_items():\n    return 3\n'
+    manager,roles=build_compiled(tmp_path,source)
+    try:
+        ready=payload(positional(roles,'root',['prepare','helper_items','1']))
+        assert ready['ok'],ready
+        context=payload(positional(roles,'editor_1',['view','1','2']))
+        assert context['ok'] and context['read_only']
+        assert 'return 1' in context['text']
+        assert 'handle' not in context and 'edit_prefix' not in context
+        before=manager.read_file('sample.py')
+        denied=payload(positional(roles,'editor_1',['edit',ready['handle'],'1-2','def value():\n    return 9']))
+        assert not denied['ok'] and 'issued view' in denied['error']
+        assert manager.read_file('sample.py')==before
+        # An explicit handle + numeric context range is equally read-only.
+        context=payload(positional(roles,'editor_1',['view',ready['handle'],'1','2']))
+        assert context['ok'] and context['read_only'] and 'handle' not in context
+    finally:
+        manager.cleanup_all()
 
 
 def test_role_engines_are_identical_and_only_entries_differ():

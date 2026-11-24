@@ -87,3 +87,12 @@ This is a native command grammar and budget calculation, not a host rewrite of m
 Role entry responses now begin with a one-line JSON metadata header. When a view is present, raw numbered Python source follows between BEGIN/END V13 SOURCE markers instead of being embedded as a JSON text string inside SDK JSON stdout. This removes an avoidable escaping layer without decoding or repairing generated code. Root delegates intent/slot; editors always read authoritative native status/view before editing. Python physical line slicing uses LF so Unicode separators inside string literals remain content.
 
 Native CLI failure exits nonzero and emits structured metadata on stderr, so the SDK labels failure as error instead of success. Successful views use stdout. Metadata is ASCII-escaped JSON for a stable one-line header; raw source stays UTF-8. Internal transaction dictionaries remain compatible for host callers. SDK/model output and required outer fields are not rewritten.
+
+
+## Read context versus write authority; explicit location joins
+
+Editor view may now inspect bounded context in its assigned private file outside the editable region. Such replies are read_only and issue no handle/edit prefix. Actual writes remain inside the root-assigned span with a current lease, hashes, compilation and outside/central checks. In-scope narrow still returns a writable view. Another file/slot, outside-file ranges and traversal remain rejected; root still cannot perform editor view actions.
+
+Task IR recognizes single file.py:line / file.py line N addresses and module-qualified global functions, not only classic traceback/class-method forms. An unordered list of stack line numbers is an error unless a complete traceback is present; root must choose the actual innermost location from the unchanged task. Single-letter prose such as article a does not force a loop locus without a code reference. Exact supported loop identifiers retain the restriction.
+
+These native parser/context repairs do not infer model intent, widen write authority or add SDK callbacks. The compiler's closed callback registry and AgentTool schema do not expose a portable child-loop cancellation hook here; native replies cannot guarantee the model stops thinking. No such enforcement is claimed.
