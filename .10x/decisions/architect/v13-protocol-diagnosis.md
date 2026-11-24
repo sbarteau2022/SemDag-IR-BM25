@@ -14,3 +14,5 @@ ADR-011 separates same-assigned-file context reading from write lease creation, 
 ADR-012 adds state-derived continuation data and a root-only fixed finalizer accepting one actual handle. No status mutation or generic malformed-call inference. Failure recommendations route to the candidate owner with the same one retry count. All 313 host tests, actual SDK continuation/denial cases and undefined-name lint pass; live finalizer trial follows the frozen source.
 
 ADR-014: one operation-local Git baseline captures immutable commit ID plus report label and memoizes only original file content at that object ID. Analysis and destructive/locus checks share it; every working-tree diff and every later verification remains fresh. No verdict cache, global cache, removed guard, SDK patch or model-policy change. Freeze active live source until its trial exits.
+
+ADR-015 fixes edit granularity: literal single-match splice inside a current leased view, through existing locked edit validation, avoids whole-function regeneration. Explicit editor-only fixed endpoint and old/new strings; no indentation/escape inference. Root apply authority and source scope unchanged.

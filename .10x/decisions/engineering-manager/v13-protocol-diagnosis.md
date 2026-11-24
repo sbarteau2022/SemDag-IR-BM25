@@ -14,3 +14,5 @@ ADR-011 separates same-assigned-file context reading from write lease creation, 
 ADR-012 adds state-derived continuation data and a root-only fixed finalizer accepting one actual handle. No status mutation or generic malformed-call inference. Failure recommendations route to the candidate owner with the same one retry count. All 313 host tests, actual SDK continuation/denial cases and undefined-name lint pass; live finalizer trial follows the frozen source.
 
 ADR-014 sequence: finish frozen ownership trial; implement native baseline read sharing; pressure-test baseline/worktree changes and safety gates; full regression + validator; paired timing; refresh public/session state and publish experimental work. No additional model-policy change or permission expansion.
+
+ADR-015 approved task sequence: native fragment primitive; static editor entry/metadata; documentation; real-source/SDK adverse tests and full suite; frozen E4B capability gate; unchanged external full task; records and main publication. No host delegation.

@@ -1,0 +1,13 @@
+# ADR-015: Exact fragment edits without whole-view regeneration
+
+Status: Accepted within the owner's instruction to fix v13 edit capability.
+
+Evidence: all five final_run edit calls supplied body text instead of the full leased function. Four failed compilation around copied docstrings; the last compiled after deleting the function header and failed outside import verification. The actual payloads lack the def header. Whole-view replacement forces E4B to reproduce unrelated source even for a small change.
+
+Decision: add an editor-only scripts/replace.py with positional HANDLE, EXACT_OLD_TEXT, REPLACEMENT_LINE... . Its operation is explicitly selected by file_path. It requires exactly one literal old fragment in the current leased view, bounded to16 old physical lines/2048 characters; no empty anchor, fuzzy match, whitespace repair, escaping repair, automatic indentation or inferred operation. Replacement elements join at explicit LF boundaries; an explicit empty replacement deletes the chosen fragment. Existing source before/after the fragment is retained by native code. Revalidate through the existing locked edit/compile/import/hash/scope/single-use path; keep outside/central verification and rollback. Every slot has its own fixed entry. Root cannot register/execute it. Generic whole-view edit stays compatible but is no longer the recommended model-facing path.
+
+Responses supply the real replace.py endpoint and current handle. Model still supplies old/new content and all required SDK fields. On zero/multiple matches, fail unchanged and request a narrower exact view. Never repair malformed outer calls or synthesize a fix.
+
+Alternative: more prompt instructions to preserve the function header. Rejected as the sole solution: previous explicit instruction was ignored repeatedly. AST body insertion with inferred indentation was considered, but expands semantics and can alter multiline literal content; a literal fragment contract is smaller and preserves bytes directly.
+
+Preregistered gates: reproduce prior whole-view header loss in a disposable component; exact-fragment counterpart preserves untouched header/docstring/source bytes. Actual compiled SDK positive edit->root verified apply for both slots; zero/ambiguous/outside/stale/cross-slot/missing-field/quoting/Unicode/CRLF/deletion/compile-error cases fail or preserve the declared exact semantics. Full host suite, official validator, lint/asset parity. Then a real E4B editing capability gate on repo source with explicit small edit requirements (component live proof, not SWE resolution), followed by the original unchanged external Dask full task. E4B/default budgets, Seatbelt/subprocess/no Docker. Preserve negative results; no task-quality claim from the capability gate.
