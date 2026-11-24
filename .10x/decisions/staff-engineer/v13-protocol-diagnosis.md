@@ -12,3 +12,5 @@ ADR-010 repairs participant-native source stdout formatting and exit status. Met
 ADR-011 separates same-assigned-file context reading from write lease creation, adds exact location/module-global joins and rejects ambiguous location lists. Existing roles/write bounds and no-callback/no-harness-modification constraints remain. Native source/selector integration and full regressions precede unchanged-case E4B validation. No claim of hard child-loop cancellation.
 
 ADR-012 adds state-derived continuation data and a root-only fixed finalizer accepting one actual handle. No status mutation or generic malformed-call inference. Failure recommendations route to the candidate owner with the same one retry count. All 313 host tests, actual SDK continuation/denial cases and undefined-name lint pass; live finalizer trial follows the frozen source.
+
+Prefer an explicit per-operation baseline object over module-global memoization or monkeypatching Git. Freeze labels to commit IDs for coherent old-side reads. Preserve existing optional call signatures and current-working-tree visibility. Resource tests use real Git, not synthetic model output.
