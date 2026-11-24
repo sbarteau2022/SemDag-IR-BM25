@@ -85,7 +85,7 @@ async def run_case(name,outdir):
         check='python -c '+shlex.quote(assertions)
         baseline=tx.run_check(check,repo,{'deadline':time.monotonic()+60});receipt['baseline']=baseline
         if baseline['exit_code']==0:raise ValueError('component request already satisfied; invalid capability gate')
-        program=('import sys,json;sys.path.insert(0,'+repr(str(SUB/'skills/semdag/assets/engine'))+');import edit_tx;print(json.dumps(edit_tx.begin('
+        program=('import sys,json;sys.dont_write_bytecode=True;sys.path.insert(0,'+repr(str(SUB/'skills/semdag/assets/engine'))+');import edit_tx;print(json.dumps(edit_tx.begin('
                  +','.join(repr(v) for v in [repo,'1','retriever.py',node.lineno,node.end_lineno,check,240])
                  +',issue='+repr(intent)+',baseline='+repr(baseline)+')))')
         preparation=manager.run_command('python -c '+shlex.quote(program))
