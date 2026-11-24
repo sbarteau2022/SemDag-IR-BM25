@@ -8,7 +8,9 @@ Use exact fragment replacement for editing. Native status/view returns replace_e
 2. Replacement code as one or more string elements, keeping all leading spaces. Multiple elements join with real newlines. An explicit empty string deletes the fragment.
 Do not add an action verb to replace.py arguments. This program preserves all surrounding source, including function headers/docstrings. Supply only the fragment you change, not the whole function. Old fragment must match exactly once inside the current view, at most16 lines/2048 characters. No fuzzy matching, escaping repair or automatic indentation occurs.
 
-Example of the argument SHAPE, not task code: positional_args [CURRENT_HANDLE, EXACT_OLD_FRAGMENT, NEW_CODE_LINE, NEXT_CODE_LINE]. All entries are strings. Gemma4 native string delimiters quote strings directly; do not insert extra JSON quotes or literal backslash-n escapes. Use ordinary Python code and preserve its indentation.
+Gemma4 native replacement call shape:
+call:run_skill_script{skill_name:<|"|>semdag<|"|>,file_path:<|"|>scripts/replace.py<|"|>,positional_args:[<|"|>CURRENT_HANDLE<|"|>,<|"|>EXACT_OLD_TEXT<|"|>,<|"|>REPLACEMENT_CODE<|"|>]}
+Replace the three placeholders with the actual handle, exact old fragment and new code. Execute this tool call to change the private source; a text response containing an array does not execute anything.
 
 If a fragment matches zero times, read the exact source again. If it matches more than once, narrow first with scripts/run.py positional_args [view, START_LINE, END_LINE]. View returns a NEW handle; use its replace_execution. If source is truncated, narrow it. Readonly context outside allowed_edit_lines grants no handle or write permission. Wrong locus: return EDIT_FAILED with the visible evidence or exact relevant symbol for root reassignment. Do not patch a symptom in unrelated logic.
 

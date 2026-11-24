@@ -15,6 +15,7 @@ from pathlib import Path
 import sys
 import time
 
+sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parents[2]
 SUB=ROOT/'AgenticSubmission/v13_orchestrator'
 sys.path.insert(0,str(SUB/'skills/semdag/assets/engine'))
