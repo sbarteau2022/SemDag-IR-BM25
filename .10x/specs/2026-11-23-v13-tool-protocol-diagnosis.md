@@ -7,3 +7,6 @@ Read-only gates: hash local CUDA/MLX templates; render the actual SDK run_skill_
 If evidence identifies JSON/native-format confusion, repair only tool-format documentation using the real native ABI and a single args shape. Preregister before the intervention and freeze the role/case/model/budgets. Full regression, official validation, same external Dask grading gate and four-minute E4B workflow follow. Live gate remains genuine prepare -> managed editor edit -> outside-verified apply; task resolution separately. No success claim from parser replays or component fixtures.
 
 If the transport is correct and the model still fails, retain the negative finding; do not disguise malformed calls with a host rewrite. Any deeper architecture or training change requires its own design. No score promotion without appropriate external evidence.
+
+## Prepared-state owner follow-up
+ADR-013 preregisters ownership metadata and accurate editor descriptions after continuation_run timed out (241.75s, empty patch). Both editor tools were present in captured root requests. Freeze the source before a single ownership_run on the same external case. Require model-selected editor edit, outside/central verified apply, and explicit submit. No authority/budget/model changes; retain negative findings and failed microperformance gate.

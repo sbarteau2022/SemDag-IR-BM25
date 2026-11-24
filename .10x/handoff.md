@@ -1,2 +1,2 @@
 # Handoff
-Read specs/2026-11-23-v13-tool-protocol-diagnosis.md. Determine model-vs-parser source of malformed fields. Preserve raw output; no inference of missing SDK fields or model-output cleanup. E4B only/no Docker/fixed budgets.
+Current branch v13-protocol-diagnosis. Follow ADR-013; preserve all role/hash/version/deadline guards. Complete SDK tests, official validation, same-case E4B Seatbelt/subprocess trial; no Docker or extra models. Update public result/session docs with negative gates before publication. Raw requests and task material remain local.
