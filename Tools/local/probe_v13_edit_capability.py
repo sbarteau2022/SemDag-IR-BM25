@@ -115,6 +115,16 @@ async def run_case(name,outdir):
                     call=getattr(part,'function_call',None)
                     if call:print(name,'tool',call.name,flush=True)
             receipt['editor_seconds']=time.monotonic()-model_start
+            exact_success=False
+            for event in events:
+                for part in event.get('content',{}).get('parts',[]):
+                    response=part.get('function_response',{}).get('response',{})
+                    if response.get('file_path')!='scripts/replace.py' or not response.get('stdout'):
+                        continue
+                    result=native(response)
+                    exact_success |= bool(result.get('ok') and result.get('edit_operation')=='exact_fragment')
+            receipt['exact_fragment_tool_succeeded']=exact_success
+            if not exact_success:raise ValueError('no successful exact-fragment tool response from the editor')
             state=await call_native(root,{'skill_name':'semdag','file_path':'scripts/run.py','positional_args':['status','1']})
             receipt['state_after_editor']=state.get('state')
             if state.get('state')!='edited' or not state.get('next_execution'):
