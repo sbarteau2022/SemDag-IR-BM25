@@ -1,0 +1,7 @@
+# v13 native execution runbook
+
+Monitor real private-edited versus central-applied state, finalizer checks, remaining task time and explicit submission. Prepared/edited prose is not apply proof; live scoring artifacts decide task resolution. No successful live editor/verification timing exists, so do not invent numerical dispatch/retry reserves. Keep one candidate owner per slot and the existing alternative-locus/retry rules.
+
+No root direct edit, editor prepare/finalize, generic helper execution, stale handle, source unescape or hidden tool-envelope repair is permitted. Investigate raw requests locally when protocol fails; redact task/model material from public reports. Local vllm-metal thinking budget remains unenforced, and throughput is not L4 scorer timing. Component Git read sharing must not become global/worktree verdict caching.
+
+Owned service cleanup requires matching listener PID and command to this E4B model and v13_protocol_capture proxy run ID; do not stop unrelated services. Restore only through documented E4B launcher/proxy and rerun official source validation before new smoke. Promotion remains blocked without live verified apply and independent task-quality evidence.
