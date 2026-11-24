@@ -1,0 +1,7 @@
+# Exact-fragment QA
+
+337 full tests pass, no failures/errors/skips. Official submission validator, role-asset equality and undefined-name lint pass. Actual compiled SDK tests exercise both fixed slots, root-only finalization, root/sibling rejection, wrong/missing fields and malformed argument counts. Primitive checks cover exact unique matching including overlaps, outside-view scope, zero/ambiguous matches, stale handles/intervening view changes, compile failure, anchor limits, explicit deletion and Unicode/CRLF/BOM/no-final-newline preservation. Real retriever source reproduces old whole-function header deletion and passes the exact-fragment counterpart. No escaping/indentation/model-output repair.
+
+Live actual compiled E4B editor on real retriever source: None-input change26.884s, Windows-separator change29.007s; both actual replace.py/exact_fragment responses, nonempty actual patches, outside/central checks0, surrounding source unchanged. Host preparation/finalization is explicit; these are component capability observations, not autonomous SWE scores. Initial unexecuted proposal and packaging-only bytecode failures remain in receipts; packaging failures never reached model and are excluded.
+
+Unchanged-case full autonomous external task is active and must be reported separately. Native exact-path timing is preregistered and will run only after inference is idle, with unchanged output/seven alternating pairs/<=10% overhead gate. No task-quality promotion or statistical reliability claim.

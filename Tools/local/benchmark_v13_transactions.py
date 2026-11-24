@@ -19,7 +19,7 @@ CANDIDATE = ROOT / 'AgenticSubmission/v13_orchestrator/skills/semdag/assets/engi
 CHECK = 'python -c \'import retriever; assert retriever.tokens("CamelCase") == ["camelcase", "camel", "case"]\''
 
 
-def trial(arm):
+def trial(arm, exact=False):
     scripts = SOURCE if arm == 'old' else CANDIDATE
     sys.path.insert(0, str(scripts))
     with tempfile.TemporaryDirectory(prefix='v13-timing-') as d:
@@ -62,7 +62,8 @@ def trial(arm):
             # begin is the deterministic prepare primitive after localization. Both arms use fixed span/check.
             baseline=tx.run_check(CHECK,repo,{'deadline':time.monotonic()+60})
             h=tx.begin(str(repo),'1','retriever.py',a,b,CHECK,60,baseline=baseline)['handle']
-            h=tx.edit(h,replacement,str(repo),'1')['handle']
+            h=(tx.replace_text(h,'return docs','return list(docs)',str(repo),'1')
+               if exact else tx.edit(h,replacement,str(repo),'1'))['handle']
             assert tx.finalize(h,str(repo),'1')['ok']
             calls=4
         duration=time.perf_counter()-started
@@ -73,11 +74,12 @@ def trial(arm):
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--arm',choices=['old','new']);ap.add_argument('--out',type=Path)
+    ap.add_argument('--exact',action='store_true',help='Use exact-fragment replacement in the candidate arm; keep identical baseline/output.')
     args=ap.parse_args()
     if args.arm:
-        print(json.dumps(trial(args.arm)));return
+        print(json.dumps(trial(args.arm,args.exact)));return
     def run(arm):
-        r=subprocess.run([sys.executable,__file__,'--arm',arm],capture_output=True,text=True,
+        r=subprocess.run([sys.executable,__file__,'--arm',arm]+(['--exact'] if args.exact else []),capture_output=True,text=True,
                          env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'},check=True)
         return json.loads(r.stdout.splitlines()[-1])
     run('old');run('new');rows=[]
@@ -85,7 +87,7 @@ def main():
         for arm in (['old','new'] if i%2==0 else ['new','old']): rows.append(run(arm))
     med={arm:statistics.median(r['seconds'] for r in rows if r['arm']==arm) for arm in ['old','new']}
     ratio=med['new']/med['old'];same=len({r['output_sha256'] for r in rows})==1
-    out={'kind':'real-source component benchmark, no model/task-resolution claim','rows':rows,'medians_seconds':med,
+    out={'kind':'real-source component benchmark, no model/task-resolution claim','candidate_edit_operation':'exact_fragment' if args.exact else 'whole_view','rows':rows,'medians_seconds':med,
          'new_over_old':ratio,'calls_old':9,'calls_new':4,'same_output':same,
          'gate_passed':same and ratio<=1.10 and 9-4>=3}
     args.out.parent.mkdir(parents=True,exist_ok=True);args.out.write_text(json.dumps(out,indent=2));print(json.dumps(out))
