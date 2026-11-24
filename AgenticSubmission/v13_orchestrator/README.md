@@ -105,3 +105,5 @@ Root edited-state status now supplies next_execution: the real skill, root-only 
 State replies distinguish candidate_applied_to_central=false from applied state. Applied replies advertise submit_patch with empty arguments. Failed-candidate verification is recorded by hash, and status identifies that candidate's owner for the existing one final retry rather than asking a different slot's editor to modify it. No actor prompt is generated and no SDK callback/dispatch is synthesized.
 
 Root now registers run.py plus the fixed-operation finalize.py; editors still register only run.py. No helper asset execution, write authority, model or token/time budget was added. Actual compiled SDK continuation/owner-denial tests and all 313 host tests pass; live completion remains the next gate.
+
+Prepared-state root replies name next_actor=editor_<slot> and root_can_edit=false, with an instruction to check relevance/required alternatives before delegation. There is no edited candidate or finalize/submit continuation yet. This is computed ownership metadata only; the root still chooses the tool call and supplies issue intent.

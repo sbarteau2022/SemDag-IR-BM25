@@ -162,7 +162,11 @@ def emit(role,out):
         state=out.get("state")
         if state in ("prepared","edited","applied"):
             out["candidate_applied_to_central"]=(state=="applied")
-        if state == "edited" and out.get("handle"):
+        if state == "prepared":
+            out["next_actor"]="editor_"+out["slot"]
+            out["root_can_edit"]=False
+            out["next_reason"]="Check assignment relevance and prepare any required alternative, then delegate editing to this slot's owner. No edited candidate exists yet."
+        elif state == "edited" and out.get("handle"):
             if out.get("verification_failed"):
                 out["next_actor"]="editor_"+out["slot"]
                 out["next_reason"]="This candidate failed verification; correct it before finalizing again."

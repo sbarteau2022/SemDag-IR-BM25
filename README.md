@@ -113,3 +113,5 @@ v13 source views now use a metadata header plus raw numbered Python, avoiding ne
 v13 now separates private-file context reads from write leases and parses exact source addresses/module-qualified globals. These are native context/localization repairs; successful live workflow and task-resolution evidence remain separate from component tests.
 
 v13 now publishes state-derived next-call data and a root-only finalize program, removing a redundant generic opcode from explicit finalization. 313 host tests pass; status remains non-mutating and all live completion/quality gates still require actual E4B execution.
+
+Prepared v13 assignments now identify their statically bound editor in native state responses; root direct edits remain forbidden. Tool descriptions reflect that ownership. Prepared replies offer no finalize/submit continuation, and retain relevance/alternative checks. This corrects a late-delegation failure observed in E4B; it does not automatically dispatch models or claim live success.

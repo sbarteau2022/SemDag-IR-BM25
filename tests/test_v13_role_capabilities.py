@@ -308,6 +308,11 @@ def test_failed_candidate_state_does_not_offer_another_finalize(tmp_path,slot):
         for command in ['git add .','git commit -qm failing-test-base','git tag -f _swegemma_baseline']:
             assert manager.run_command(command).exit_code==0
         ready=payload(positional(roles,'root',['prepare','shared retrieval signal',slot]));assert ready['ok'],ready
+        assert ready['state']=='prepared' and ready['next_actor']=='editor_'+slot
+        assert ready['root_can_edit'] is False and ready['candidate_applied_to_central'] is False
+        assert 'next_execution' not in ready and 'next_tool' not in ready
+        unchanged=payload(positional(roles,'root',['status',slot]))
+        assert unchanged['next_actor']==ready['next_actor'] and unchanged['root_can_edit'] is False
         name='first_items' if slot=='1' else 'second_items'
         edit=payload(positional(roles,'editor_'+slot,['edit_lines',ready['handle'],f'def {name}():','    """shared retrieval signal"""','    return 99']))
         assert edit['ok'],edit
