@@ -1,0 +1,7 @@
+# v13 protocol and execution QA
+
+317 host tests pass (zero failures/errors/skips). Actual unmodified compiled SDK/subprocess fixtures exercise both editor slots, capability denials, root-only finalization, prepared/edited/applied metadata, failed-candidate owner links, context-only reads, stale handles, independent cache state, compilation and outside/central verification/rollback. Ruff F821/F823, asset equality and official directory validator pass.
+
+Real Git pressure tests preserve coherent immutable old-side reads while observing later baseline/worktree changes; destructive/protected/nongit gates remain active. Final benchmark uses unchanged seven alternating pairs and <=10% overhead criterion: old0.155150500/new0.149583292 (-3.59%), same output, original modeled controls9->4. Profile Git calls8->5. Prior +15.44% failure retained; first concurrent-test measurement excluded.
+
+Repeated one-case E4B development diagnostics are not held-out trials. Every completed trial remains unresolved with empty patch. Prepared-owner trial produced accepted private edit222.7s but timed out241.63s; no verified apply. Final-source E4B parity run pending. Sign-off covers native component regression only; task-quality/runtime promotion denied until live evidence satisfies the gates.

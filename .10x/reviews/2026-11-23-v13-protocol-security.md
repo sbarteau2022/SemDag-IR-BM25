@@ -1,0 +1,7 @@
+# v13 protocol and execution adversarial review
+
+Review scope: role ABI, transaction authority, request capture and operation-local Git reads. Root cannot edit; editors cannot prepare/finalize/change slots or execute helper assets. Static entry bindings, current handles, repository identity, source hashes, scoped spans, durable assignment markers, compilation and deadlines remain checked. Context reads grant no edit handles. Outside verification tests central-plus-candidate in an independent copy; central verification and conditional rollback remain enabled. No hidden SDK/model-output rewrite is introduced.
+
+New baseline context pins a validated immutable object ID, checks repository identity, caches only successful original-file text and lives for one operation. Working-tree reads are fresh. Real Git regressions exercise tag movement and cross-repository misuse. No persistent/global verdict cache or removed safety check. Existing nonzero tool error exits remain truthful.
+
+Raw SDK requests are local owner-only files without HTTP headers; none are staged/ingested. Only verified public parser/template text entered host research memory. Submission root contains only allowed extensions and one E4B base. No Docker, runtime network, extra model API, host research tool, test tampering or automatic dispatch added. Approval is for experimental source review, not Kaggle deployment or demonstrated task correctness.

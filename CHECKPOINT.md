@@ -1,3 +1,9 @@
+## Current checkpoint — 2026-11-23
+
+Read this before the historical checkpoint below. Work targets **v13_orchestrator**, E4B only, native Seatbelt/subprocess, **no Docker**. Approved native execution changes pass317 tests/official validation and the unchanged component timing gate:0.155150500->0.149583292s (-3.59%), identical output, Git calls8->5, modeled control operations9->4. All outside/central/scope/version guards remain.
+
+Live E4B still has no verified central apply or task resolution on the repeated external development case. Latest completed ownership trial0/1, empty patch,241.63s timeout; final-source parity trial pending. No promotion/Kaggle submission; no numerical dispatch/retry tuning before successful editor/verification timing. See docs/runs/v13_PROTOCOL_2026-11-23.md and .10x/handoff.md. Historical Docker/current-version/remote claims below are superseded by this checkpoint and docs/SESSION_README.md.
+
 # CHECKPOINT: 2026-11-17, v6 baseline + telemetry
 
 Resume point for the next session. Rules and layout: [AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md). Audit of the space: `Designs/AUDIT_2026-11-17.md`.

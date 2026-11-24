@@ -2,6 +2,14 @@
 
 Start here. Every session reads this file first (owner rule, 2026-11-18; moved from the root README.md on 2026-11-19), then `CHECKPOINT.md`, then `MEMORY.md`.
 
+## Current resume point: v13 (2026-11-23)
+
+E4B only, macOS Seatbelt plus official subprocess backend, no Docker. Native role-bound transactions and immutable Git read sharing pass **317 host tests**, official validation, asset equality and undefined-name lint. Fixed-source seven-pair lifecycle timing: 0.155150500 to 0.149583292 seconds (**3.59% faster**), identical output, modeled control operations9->4; profiling verifies Git subprocesses8->5. Earlier +15.44% failed gate is retained. Component timings do not establish model/task speed.
+
+Repeated external Dask development trials remain unresolved with empty patches. Some edits now compile in isolated slots, but no verified central apply or successful submission has been observed. Prepared-owner trial timed out241.63s; latest final-source parity run is pending. Do not claim a quality improvement or tune numeric editor thresholds from failed runs. No Kaggle submission or candidate promotion. v6 stays frozen as the historical reference.
+
+Read [current report](runs/v13_PROTOCOL_2026-11-23.md), ADRs004-014 and `.10x/handoff.md`. Raw captures/task material are local-only under reports/v13_protocol_2026-11-23. Current branch: v13-protocol-diagnosis, fast-forward publication to main after final receipts.
+
 ## Goal
 
 Solo entry in Kaggle's "Google - The Gemma 4 Developer Agent Competition". Targets: Top 3 on the main leaderboard and the $10,000 Small Model Bonus. Sole base model: `gemma-4-e4b-it-qat-w4a16-ct`.

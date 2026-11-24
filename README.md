@@ -87,33 +87,14 @@ Dynamic dispatch and runtime imports stay unresolved. End-to-end numbers come fr
 Licensed under Apache 2.0; see [LICENSE](LICENSE).
 
 
-## v13 qualification
+## v13 qualification and optimization
 
-The current candidate is `AgenticSubmission/v13_orchestrator`, tested with Gemma E4B only using macOS Seatbelt and the official subprocess backend, without Docker. Workspace hardlinks were found to mutate central and sibling files before apply; independent task-local copies now pass the isolation regressions. Editor roles retain the owner defaults of 16,384 output tokens and 4,096 thinking tokens.
+`AgenticSubmission/v13_orchestrator` is experimental, Gemma E4B only. Runs use macOS Seatbelt and the official subprocess backend, without Docker. Fixed budgets remain four minutes/task, 40 tool calls, 60 turns, 16,384 output and 4,096 thinking tokens. Local vllm-metal does not enforce thinking budget; local timing does not predict the scorer.
 
-A repository-disjoint external Dask issue qualifies the grading path: an empty patch yields 2 failures / 43 passes, and the reference patch yields 45 passes. This establishes grading behavior for that issue, not generalization or a leaderboard score. Host component tests and model-run evidence are recorded in the local `reports/v13_qualification_2026-11-22/` directory. The qualification command is documented in [Tools/local/qualify_v13.py](Tools/local/qualify_v13.py).
+Native role-bound transactions provide independent slot copies, scoped/versioned edit handles, actual Python compilation, fresh outside and central verification, and conditional rollback. Root prepares/verifies; statically bound editors edit their own slot. Root registers `run.py` and `finalize.py`; editors register only `run.py`. State replies identify the owning editor, distinguish private edits from central application, and publish explicit next-operation data. The model must choose valid tool calls; no SDK/model-output repair or automatic dispatch is used.
 
-The v13 live diagnostic runs both remained unresolved with empty patches; the rerun hit the four-minute limit. No task-resolution improvement is established. Full findings and limitations: [v13 qualification report](docs/runs/v13_QUALIFICATION_2026-11-22.md).
+Verification shares one operation-local immutable Git baseline and original-file reads. Working-tree diffs and subsequent verification calls remain fresh. Profiling confirms eight to five Git calls. The original seven-pair benchmark passes: 0.155151 to 0.149583 seconds, **3.59% faster**, identical output, nine to four modeled control operations. This is component execution timing, not a model-call or task-resolution gain. An earlier correctness-repair benchmark failed at +15.44%; that negative result remains documented.
 
+**317 host tests pass**, including actual compiled SDK/subprocess lifecycle and denial fixtures; official directory validation, role-asset equality and undefined-name lint also pass. E4B development runs have accepted private edits, but have not achieved a verified central apply or resolved task. No candidate promotion or Kaggle submission is established. The repeated external Dask issue is development evidence, not a held-out quality estimate. Its grading control passed: empty patch 2 failures/43 passes, reference 45 passes.
 
-Final Stage 1 result: 247 host tests pass; native component gate passes (9→4 modeled control operations, +4.87% median native overhead, identical output). E4B live adoption failed: no managed edits, no editor dispatch and an empty patch. Candidate remains experimental. See [Stage 1 findings](docs/runs/v13_STAGE1_2026-11-23.md).
-
-The experimental v13 role-capability policy removes generic shell tools and registers one native entry per role. Root can prepare/finalize/status; editors can view/edit/status only in their fixed slot. Engine dependencies remain readable assets. SDK-level denial and successful-lifecycle integration tests precede live qualification; no competition-quality promotion is implied.
-
-Role-policy result: 272 host tests and actual SDK role/lifecycle fixtures pass. Both E4B development trials remained unresolved with empty patches; native tool protocol is still an unmet live gate. No promotion is established. See [role-policy findings](docs/runs/v13_ROLE_POLICY_2026-11-23.md).
-
-The v13 protocol investigation adds a compatible native grammar for the SDK’s concretely typed positional_args field and aligns skill discovery/loading with SDK instructions. Simple raw/chat probes pass; full-context generation still exhibits wrong-skill routing. Live milestone results remain separate from component proof.
-
-Recent v13 live execution exposed assignment/cache and compilation-context defects; repairs isolate per-assignment verification and preserve unchanged-candidate reassignment. 296 host tests pass. The newer source exceeds the native microbenchmark overhead gate (+15.44%); no performance promotion is claimed. Live workflow verification remains separate.
-
-v13’s native controller now owns conservative task-clock calculation and accepts explicit line-array edits, removing model-side clock copying and ambiguous write packets. Live workflow evidence remains the qualification gate; failed trials and the native overhead-gate failure are retained.
-
-v13 source views now use a metadata header plus raw numbered Python, avoiding nested JSON source escaping. Native failures return nonzero/error status. This remains experimental until the unchanged-task E4B workflow and grader demonstrate success.
-
-v13 now separates private-file context reads from write leases and parses exact source addresses/module-qualified globals. These are native context/localization repairs; successful live workflow and task-resolution evidence remain separate from component tests.
-
-v13 now publishes state-derived next-call data and a root-only finalize program, removing a redundant generic opcode from explicit finalization. 313 host tests pass; status remains non-mutating and all live completion/quality gates still require actual E4B execution.
-
-Prepared v13 assignments now identify their statically bound editor in native state responses; root direct edits remain forbidden. Tool descriptions reflect that ownership. Prepared replies offer no finalize/submit continuation, and retain relevance/alternative checks. This corrects a late-delegation failure observed in E4B; it does not automatically dispatch models or claim live success.
-
-Native v13 verification now shares one operation-local Git baseline pinned to its commit ID. Original-file reads are reused only within that verification; working-tree diffs and subsequent verification calls stay fresh. Analysis, destructive/locus checks and outside/central verification remain enabled. The original seven-pair benchmark improves from 0.155151 s to 0.149583 s (3.59% faster), with identical output and 9→4 modeled controls; the original <=10% overhead gate passes again. This is native component timing, not model-call reduction or task speed.
+Evidence: [qualification](docs/runs/v13_QUALIFICATION_2026-11-22.md), [Stage 1](docs/runs/v13_STAGE1_2026-11-23.md), [role policy](docs/runs/v13_ROLE_POLICY_2026-11-23.md), and [current protocol/execution report](docs/runs/v13_PROTOCOL_2026-11-23.md). Raw request/task captures stay local. The host-only Edge research library is never included in the submission.
