@@ -10,3 +10,6 @@ If the transport is correct and the model still fails, retain the negative findi
 
 ## Prepared-state owner follow-up
 ADR-013 preregisters ownership metadata and accurate editor descriptions after continuation_run timed out (241.75s, empty patch). Both editor tools were present in captured root requests. Freeze the source before a single ownership_run on the same external case. Require model-selected editor edit, outside/central verified apply, and explicit submit. No authority/budget/model changes; retain negative findings and failed microperformance gate.
+
+## Native execution follow-up
+ADR-014 preregisters operation-local immutable baseline/file reads, supported by the saved native cProfile. Do not change candidate source during ownership_parity_run. After it finishes, implement and test without dropping verification; rerun the original paired component benchmark while inference is idle. Report old and new measurements, including the failed gate. This changes no model-facing role policy or budgets.
