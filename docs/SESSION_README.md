@@ -6,9 +6,9 @@ Start here. Every session reads this file first (owner rule, 2026-11-18; moved f
 
 E4B only, macOS Seatbelt plus official subprocess backend, no Docker. Native role-bound transactions and immutable Git read sharing pass **317 host tests**, official validation, asset equality and undefined-name lint. Fixed-source seven-pair lifecycle timing: 0.155150500 to 0.149583292 seconds (**3.59% faster**), identical output, modeled control operations9->4; profiling verifies Git subprocesses8->5. Earlier +15.44% failed gate is retained. Component timings do not establish model/task speed.
 
-Repeated external Dask development trials remain unresolved with empty patches. Some edits now compile in isolated slots, but no verified central apply or successful submission has been observed. Prepared-owner trial timed out241.63s; latest final-source parity run is pending. Do not claim a quality improvement or tune numeric editor thresholds from failed runs. No Kaggle submission or candidate promotion. v6 stays frozen as the historical reference.
+Repeated external Dask development trials remain unresolved with empty patches. Some edits now compile in isolated slots, but no verified central apply or successful submission has been observed. Prepared-owner trial timed out241.63s; final-source parity run also timed out241.64s with0/1 and an empty patch. Its root reached the finalizer, but outside verification rejected a missing required function definition. Do not claim a quality improvement or tune numeric editor thresholds from failed runs. No Kaggle submission or candidate promotion. v6 stays frozen as the historical reference.
 
-Read [current report](runs/v13_PROTOCOL_2026-11-23.md), ADRs004-014 and `.10x/handoff.md`. Raw captures/task material are local-only under reports/v13_protocol_2026-11-23. Current branch: v13-protocol-diagnosis, fast-forward publication to main after final receipts.
+Read [current report](runs/v13_PROTOCOL_2026-11-23.md), ADRs004-014 and `.10x/handoff.md`. Raw captures/task material are local-only under reports/v13_protocol_2026-11-23. Source is recorded on main after fast-forward publication of v13-protocol-diagnosis. Owned E4B/proxy services stopped; restart deliberately for the next run.
 
 ## Goal
 
