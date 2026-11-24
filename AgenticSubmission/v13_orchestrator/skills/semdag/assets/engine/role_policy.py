@@ -156,11 +156,21 @@ def dispatch(role, bound_slot, argv):
     return tx.read_context(handle,a,b,repo,slot)
 
 
-def main(role, bound_slot=None, argv=None):
-    try:
-        out = dispatch(role, bound_slot, list(sys.argv[1:] if argv is None else argv))
-    except Exception as exc:
-        out = {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:1800]}
+def emit(role,out):
+    """Publish real next-operation data; never execute a continuation automatically."""
+    if role == "root" and out.get("ok"):
+        state=out.get("state")
+        if state in ("prepared","edited","applied"):
+            out["candidate_applied_to_central"]=(state=="applied")
+        if state == "edited" and out.get("handle"):
+            if out.get("verification_failed"):
+                out["next_actor"]="editor_"+out["slot"]
+                out["next_reason"]="This candidate failed verification; correct it before finalizing again."
+            else:
+                out["next_execution"]={"skill_name":"semdag","file_path":"scripts/finalize.py","positional_args":[out["handle"]]}
+        elif state == "applied":
+            out["next_tool"]="submit_patch"
+            out["next_tool_arguments"]={}
     if role == "editor" and out.get("ok") and out.get("handle"):
         out["edit_prefix"]=["edit_lines",out["handle"]]
         out["edit_contract"]="Append replacement code as separate array elements, preserving spaces; never pack commas. Use the new handle after view."
@@ -175,3 +185,28 @@ def main(role, bound_slot=None, argv=None):
         print(source,file=stream)
         print("---END V13 SOURCE---",file=stream)
     return out
+
+
+def main(role,bound_slot=None,argv=None):
+    try:
+        out=dispatch(role,bound_slot,list(sys.argv[1:] if argv is None else argv))
+    except Exception as exc:
+        out={"ok":False,"error":f"{type(exc).__name__}: {exc}"[:1800]}
+    return emit(role,out)
+
+
+def finalize_main(argv=None):
+    """Only the root package registers this explicitly selected fixed operation."""
+    try:
+        values=list(sys.argv[1:] if argv is None else argv)
+        if values and values[0]=="--":values=values[1:]
+        if len(values)!=1:
+            raise ValueError("finalize.py requires exactly one current candidate handle")
+        repo=os.path.realpath(wsroot.workspace_root())
+        _,state=tx.load_handle(values[0],repo)
+        if state["slot"] not in ("1","2"):
+            raise PermissionError("root finalizer supports only its two registered slots")
+        out=tx.finalize(values[0],repo,state["slot"])
+    except Exception as exc:
+        out={"ok":False,"error":f"{type(exc).__name__}: {exc}"[:1800]}
+    return emit("root",out)

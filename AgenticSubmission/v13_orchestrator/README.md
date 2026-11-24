@@ -96,3 +96,12 @@ Editor view may now inspect bounded context in its assigned private file outside
 Task IR recognizes single file.py:line / file.py line N addresses and module-qualified global functions, not only classic traceback/class-method forms. An unordered list of stack line numbers is an error unless a complete traceback is present; root must choose the actual innermost location from the unchanged task. Single-letter prose such as article a does not force a loop locus without a code reference. Exact supported loop identifiers retain the restriction.
 
 These native parser/context repairs do not infer model intent, widen write authority or add SDK callbacks. The compiler's closed callback registry and AgentTool schema do not expose a portable child-loop cancellation hook here; native replies cannot guarantee the model stops thinking. No such enforcement is claimed.
+
+
+## State-derived continuation and root-only finalizer
+
+Root edited-state status now supplies next_execution: the real skill, root-only scripts/finalize.py and one actual current handle. The model must select/send this call; status never applies source. The explicit finalizer program derives the slot from the validated handle and runs the same outside/central checks. Editors do not register it. Generic malformed run.py requests remain errors.
+
+State replies distinguish candidate_applied_to_central=false from applied state. Applied replies advertise submit_patch with empty arguments. Failed-candidate verification is recorded by hash, and status identifies that candidate's owner for the existing one final retry rather than asking a different slot's editor to modify it. No actor prompt is generated and no SDK callback/dispatch is synthesized.
+
+Root now registers run.py plus the fixed-operation finalize.py; editors still register only run.py. No helper asset execution, write authority, model or token/time budget was added. Actual compiled SDK continuation/owner-denial tests and all 313 host tests pass; live completion remains the next gate.

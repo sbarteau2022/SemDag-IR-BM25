@@ -111,3 +111,5 @@ v13’s native controller now owns conservative task-clock calculation and accep
 v13 source views now use a metadata header plus raw numbered Python, avoiding nested JSON source escaping. Native failures return nonzero/error status. This remains experimental until the unchanged-task E4B workflow and grader demonstrate success.
 
 v13 now separates private-file context reads from write leases and parses exact source addresses/module-qualified globals. These are native context/localization repairs; successful live workflow and task-resolution evidence remain separate from component tests.
+
+v13 now publishes state-derived next-call data and a root-only finalize program, removing a redundant generic opcode from explicit finalization. 313 host tests pass; status remains non-mutating and all live completion/quality gates still require actual E4B execution.

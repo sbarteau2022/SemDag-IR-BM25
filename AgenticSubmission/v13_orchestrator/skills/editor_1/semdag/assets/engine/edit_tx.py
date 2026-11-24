@@ -175,6 +175,7 @@ def view_result(s):
     a, b = s['view']
     shown = '\n'.join(f'{i}: {line}' for i, line in enumerate(physical_lines(text)[a-1:b], a))
     return {'ok': True, 'slot': s['slot'], 'handle': s['handle'], 'generation': s['generation'],
+            'state': s['state'], 'verification_failed': s.get('last_failure',{}).get('candidate_hash') == s['slot_hash'],
             'file': s['file'], 'lines': f'{a}-{b}', 'total_lines': len(physical_lines(text)), 'text': shown[:6000],
             'text_truncated': len(shown) > 6000, 'baseline': s.get('baseline'),
             'remaining_seconds': round(max(0, s['deadline'] - time.monotonic()), 2)}
@@ -464,10 +465,13 @@ def finalize(handle, repo=None, slot=None):
             if file_at(verify, s['file']).read_bytes() != candidate:
                 raise ValueError('verification changed candidate source')
         if outside['exit_code'] != 0:
+            s['last_failure']={'candidate_hash':s['slot_hash'],'stage':'outside','check':outside}
+            save(p,s)
             return {'ok': False, 'error': 'outside verification failed', 'check': outside}
         check_versions(s)
         mode = stat.S_IMODE(central.stat().st_mode)
         atomic_source(central, candidate, mode)
+        checked = analysis = None
         try:
             checked = run_check(s['check'], s['repo'], s)
             analysis = repo_eval.verify(repo_eval.parse_args(['--verify', '--container', s['container'], '--repo', s['repo']]))
@@ -476,9 +480,11 @@ def finalize(handle, repo=None, slot=None):
             check_deadline(s)
             if central.read_bytes() != candidate:
                 raise ValueError('central source changed during verification')
-        except BaseException:
+        except BaseException as exc:
             if central.read_bytes() == candidate:
                 atomic_source(central, before, mode)
+            s['last_failure']={'candidate_hash':s['slot_hash'],'stage':'central','check':checked,'error':str(exc)[:1000]}
+            save(p,s)
             raise
         s['state'] = 'applied'
         s['handle'] = ''

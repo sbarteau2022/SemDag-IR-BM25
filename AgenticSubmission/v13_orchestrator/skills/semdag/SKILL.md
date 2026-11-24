@@ -3,7 +3,7 @@ name: semdag
 description: Handle Python software issues in any repository through native prepare/finalize/status. This is the single root skill for all repository work; repository names are not skill names.
 ---
 
-The tool name is run_skill_script. Outer skill_name is semdag; outer file_path is scripts/run.py. Use positional_args as an array of strings. Never put these fields inside args, use the repository name as skill_name, or supply a source filename as file_path. Do not use args or short_options in this preferred ABI.
+The tool name is run_skill_script. Outer skill_name is semdag. Use scripts/run.py for prepare/status, and use the exact next_execution record for finalization (root-only scripts/finalize.py). Use positional_args as an array of strings. Never put these fields inside args, use the repository name as skill_name, or supply a source filename as file_path. Do not use args or short_options in this preferred ABI.
 
 Gemma4 native status call:
 call:run_skill_script{skill_name:<|"|>semdag<|"|>,file_path:<|"|>scripts/run.py<|"|>,positional_args:[<|"|>status<|"|>]}
@@ -11,7 +11,7 @@ The SDK inserts its -- separator; action names below have no hyphens. String del
 
 Root positional forms: [prepare, RETRIEVAL_QUERY, SLOT]; [status, SLOT]; [finalize, HANDLE, SLOT]. All elements are strings. Prepare must succeed before dispatching an editor. Preserve the existing BM25-alternative second-editor and one-final-retry policy. Finalize performs outside and central checks; only ok true/state applied confirms application. Root cannot edit/view through editor actions.
 
-Only run.py is an executable skill resource. Readable engine assets are not executable tool targets. Handles bind task, slot, file/span and source version. Wrong role, stale/cross-slot handle and malformed arity/type fail without mutation. Legacy explicit flag grammar remains for compatibility, but do not mix it with positional_args. Missing or wrong outer SDK fields are not repaired. E4B/budgets unchanged; this is not full host containment or automatic prevention of every premature dispatch/submit.
+Root registers run.py and the fixed-operation finalize.py; implementation assets are not executable skill resources. Readable engine assets are not executable tool targets. Handles bind task, slot, file/span and source version. Wrong role, stale/cross-slot handle and malformed arity/type fail without mutation. Legacy explicit flag grammar remains for compatibility, but do not mix it with positional_args. Missing or wrong outer SDK fields are not repaired. E4B/budgets unchanged; this is not full host containment or automatic prevention of every premature dispatch/submit.
 
 The prepare text is a retrieval query, not a copy of the whole ticket. Include the title, exact error and relevant traceback/symbol names in a few sentences. Exclude conda/pip environment transcripts. Root still receives the unmodified full task and must judge the fix against it; no host truncation or rewriting is performed.
 
@@ -26,3 +26,6 @@ Read-only view may use the current assignment and numeric range, without copying
 View responses contain a JSON metadata header then ---BEGIN V13 SOURCE--- / ---END V13 SOURCE--- around raw numbered Python lines. Source is not a JSON string to copy/unescape. Editors must read native status/view, not parent-regenerated code. Use only the code portion (no line numbers) in edit_lines; Python single-quoted messages can avoid unnecessary transport quote escaping. Native operation failures exit nonzero and emit structured stderr; success alone is not hidden-test success.
 
 Context reads in your assigned private file may go outside editable bounds, but return read_only with no write lease/prefix. A writable view remains constrained by allowed_edit_lines. No other file/slot or host paths are readable through this action. If a different function is the cause, editor reports its exact module-qualified symbol or file:line and root re-prepares an unchanged slot. Prepare supports exact locations and module-qualified globals; ambiguous line lists are errors rather than guessed anchors. Single-letter prose is not a forced loop variable without a code reference.
+
+
+Root finalization is also exposed as the registered scripts/finalize.py, accepting one actual handle. After edit, status publishes the exact next_execution object; pass it as the arguments to run_skill_script without reconstructing a generic opcode. Merely asking status never applies source. Selecting finalize.py explicitly requests verify/apply. Generic malformed run.py calls remain errors. Editors do not register finalize.py. Applied state publishes next_tool submit_patch with empty next_tool_arguments. Failed candidate status publishes its own next_actor for the unchanged one-final-retry count; no cross-slot editor writes are allowed.

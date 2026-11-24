@@ -99,7 +99,7 @@ def test_compiled_roles_have_no_shell_or_raw_edit_tools(compiled):
         assert ('submit_patch' in names)==(role=='root')
         skills=toolset(agent)._skills
         assert set(skills)=={'semdag'}
-        assert skills['semdag'].resources.list_scripts()==['run.py']
+        assert set(skills['semdag'].resources.list_scripts())==({'run.py','finalize.py'} if role=='root' else {'run.py'})
     entries=[toolset(a)._skills['semdag'].resources.get_script('run.py').src for a in roles.values()]
     assert len(set(entries))==3
 
@@ -171,9 +171,12 @@ def test_actual_compiled_prepare_editor_edit_finalize(compiled):
     edited=payload(invoke(roles,'editor_1',['--edit',own['handle'],'--text','def value():\n    return 2']))
     assert edited['ok'],edited
     assert manager.read_file('sample.py').endswith('return 1\n')
-    applied=payload(invoke(roles,'root',['--finalize',edited['handle']]))
+    status=payload(invoke(roles,'root',['--status']))
+    assert status['state']=='edited' and not status['candidate_applied_to_central'] and status['next_execution']['file_path']=='scripts/finalize.py'
+    applied=payload(invoke(roles,'root',[],raw=status['next_execution']))
     assert applied['ok'] and applied['state']=='applied',applied
     assert applied['outside_check']['exit_code']==applied['central_check']['exit_code']==0
+    assert applied['next_tool']=='submit_patch' and applied['next_tool_arguments']=={} and applied['candidate_applied_to_central']
     assert manager.read_file('sample.py')=='def value():\n    return 2\n'
 
 
@@ -277,6 +280,44 @@ def test_actual_sdk_context_read_never_grants_an_outside_write_lease(tmp_path):
         # An explicit handle + numeric context range is equally read-only.
         context=payload(positional(roles,'editor_1',['view',ready['handle'],'1','2']))
         assert context['ok'] and context['read_only'] and 'handle' not in context
+    finally:
+        manager.cleanup_all()
+
+
+def test_fixed_finalizer_is_root_only_and_requires_exact_handle(compiled):
+    manager,roles=compiled;before=manager.read_file('sample.py')
+    for role in ['editor_1','editor_2']:
+        assert positional_finalizer(roles,role,['unknown'])['error_code']=='SCRIPT_NOT_FOUND'
+    for values in [[],['unknown'],['unknown','1'],['--role','editor']]:
+        out=payload(positional_finalizer(roles,'root',values));assert not out['ok']
+    # Generic dispatch still does not infer an omitted operation.
+    assert not payload(positional(roles,'root',['unknown-handle-only']))['ok']
+    assert manager.read_file('sample.py')==before
+
+
+def positional_finalizer(roles,role,values):
+    return invoke(roles,role,[],raw={'skill_name':'semdag','file_path':'scripts/finalize.py','positional_args':values})
+
+
+@pytest.mark.parametrize('slot',['1','2'])
+def test_failed_candidate_state_does_not_offer_another_finalize(tmp_path,slot):
+    source='def first_items():\n    """shared retrieval signal"""\n    return 1\n\ndef second_items():\n    """shared retrieval signal"""\n    return 3\n'
+    manager,roles=build_compiled(tmp_path,source)
+    try:
+        manager.write_file('tests/test_sample.py','from sample import first_items,second_items\ndef test_first_items():\n    assert first_items()==2\ndef test_second_items():\n    assert second_items()==4\n')
+        for command in ['git add .','git commit -qm failing-test-base','git tag -f _swegemma_baseline']:
+            assert manager.run_command(command).exit_code==0
+        ready=payload(positional(roles,'root',['prepare','shared retrieval signal',slot]));assert ready['ok'],ready
+        name='first_items' if slot=='1' else 'second_items'
+        edit=payload(positional(roles,'editor_'+slot,['edit_lines',ready['handle'],f'def {name}():','    """shared retrieval signal"""','    return 99']))
+        assert edit['ok'],edit
+        status=payload(positional(roles,'root',['status',slot]));assert 'next_execution' in status
+        failed=payload(invoke(roles,'root',[],raw=status['next_execution']));assert not failed['ok'],failed
+        assert 'outside verification' in failed['error']
+        status=payload(positional(roles,'root',['status',slot]))
+        assert status['verification_failed'] and status['next_actor']=='editor_'+slot
+        assert 'next_execution' not in status
+        assert manager.read_file('sample.py')==source
     finally:
         manager.cleanup_all()
 
