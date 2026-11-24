@@ -2,13 +2,15 @@
 
 Start here. Every session reads this file first (owner rule, 2026-11-18; moved from the root README.md on 2026-11-19), then `CHECKPOINT.md`, then `MEMORY.md`.
 
-## Current resume point: v13 (2026-11-23)
+## Current resume point: exact v13 edits (2026-11-24)
 
-E4B only, macOS Seatbelt plus official subprocess backend, no Docker. Native role-bound transactions and immutable Git read sharing pass **317 host tests**, official validation, asset equality and undefined-name lint. Fixed-source seven-pair lifecycle timing: 0.155150500 to 0.149583292 seconds (**3.59% faster**), identical output, modeled control operations9->4; profiling verifies Git subprocesses8->5. Earlier +15.44% failed gate is retained. Component timings do not establish model/task speed.
+E4B only, macOS Seatbelt/official subprocess, no Docker. ADR-015 replaces one small unique exact source fragment, retaining surrounding headers/docstrings through native code.337 tests, official validator, asset equality and undefined-name lint pass. Two live actual-editor capability requests on real retriever source pass outside/central verification (26.88s and29.01s); host prepared/finalized those component gates.
 
-Repeated external Dask development trials remain unresolved with empty patches. Some edits now compile in isolated slots, but no verified central apply or successful submission has been observed. Prepared-owner trial timed out241.63s; final-source parity run also timed out241.64s with0/1 and an empty patch. Its root reached the finalizer, but outside verification rejected a missing required function definition. Do not claim a quality improvement or tune numeric editor thresholds from failed runs. No Kaggle submission or candidate promotion. v6 stays frozen as the historical reference.
+The unchanged full external Dask task now completes **autonomous prepare -> editor exact edit -> outside/central verified apply -> explicit submit**,498-byte patch,184.67s,5counted calls/12LLM calls. Its independent task grader remains0/1 (2fail/43pass): the selected fix changes downstream update logic rather than YAML loading. No quality promotion or Kaggle submission. Scope/handle/compile/verification guards remain active.
 
-Read [current report](runs/v13_PROTOCOL_2026-11-23.md), ADRs004-014 and `.10x/handoff.md`. Raw captures/task material are local-only under reports/v13_protocol_2026-11-23. Source is recorded on main after fast-forward publication of v13-protocol-diagnosis. Owned E4B/proxy services stopped; restart deliberately for the next run.
+Native exact-path seven-pair timing fails the original <=10% overhead gate:0.184782291->0.219495708s(+18.79%), same output, modeled controls9->4. Do not substitute the earlier whole-view3.59% timing result or relax the threshold. Next work: causal fix selection, edit-path timing and broader policy qualification. No numerical dispatch reserve is established by these component timings.
+
+Read [current exact-edit report](runs/v13_EXACT_EDITS_2026-11-24.md) and ADR-015. Raw artifacts stay local under reports/v13_exact_edits_2026-11-24. No task/model material entered research memory. Experimental branch v13-exact-edits will fast-forward to main after final receipts.
 
 ## Goal
 

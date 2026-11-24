@@ -1,3 +1,7 @@
+## Current checkpoint — 2026-11-24
+
+v13 exact-fragment editing now works in the observed autonomous E4B workflow: prepare, editor edit, outside/central verified apply and explicit498-byte submit;184.67s, no harness error. Independent Dask grader remains0/1 (wrong fix). Two additional live component edit gates pass; host337 tests/official validator pass. ADR-015 and docs/runs/v13_EXACT_EDITS_2026-11-24.md are current. No Docker/other models/budget changes. Native exact timing gate fails+18.79%, retained; no score/speed promotion. Preserve prior records below as history.
+
 ## Current checkpoint — 2026-11-23
 
 Read this before the historical checkpoint below. Work targets **v13_orchestrator**, E4B only, native Seatbelt/subprocess, **no Docker**. Approved native execution changes pass317 tests/official validation and the unchanged component timing gate:0.155150500->0.149583292s (-3.59%), identical output, Git calls8->5, modeled control operations9->4. All outside/central/scope/version guards remain.

@@ -27,6 +27,14 @@ Initial negatives are retained. Before the explicit native-call example, E4B ret
 
 337 host tests pass, zero errors/failures/skips. Actual SDK tests exercise both editor roles and root finalization, malformed/missing fields, root/sibling denial, stale and intervening views, zero/ambiguous/overlapping/outside fragments, quote/Unicode/CRLF/BOM/no-final-newline preservation and explicit deletion. A real retriever source replay reproduces the old compiled header loss and verifies the preserving counterpart. Official directory validation, role-asset equality and undefined-name lint pass.
 
-The unchanged full external Dask task is now running with the frozen candidate and the same official parity wrapper/budgets. Its autonomous edit/apply/submission and resolution outcomes will be recorded separately. No quality promotion follows from the two component gates.
+The unchanged external Dask full-task run **completed the autonomous edit lifecycle**: root prepared at21.0s, editor executed one successful exact-fragment edit at157.2s, root finalized at172.0s, outside/central checks passed and applied at174.6s, and root explicitly submitted a498-byte patch at176.7s. Full task184.67s,5 counted tools,12 LLM calls, no harness error. No host prepared/edited/finalized/submitted this full-task run.
+
+The independent task grader remains **0/1 resolved**, exit1,2 failures/43 passes. The patch preserved the function and changed one condition in the downstream update function; it did not solve the malformed-YAML loading requirements. This is genuine live edit/apply/submit proof, not task-resolution improvement. Remaining task work is causal localization/fix choice and broader policy qualification. Repeated development on one case is not a held-out estimate.
 
 Local receipts: reports/v13_exact_edits_2026-11-24/, including source manifests, JUnit, real model events, actual patches, outside/central receipts, excluded launch errors and exact-endpoint evidence. Raw artifacts remain local. Design: ADR-015 and .10x/specs/2026-11-24-v13-edit-capability.md.
+
+## Exact-path native timing gate
+
+The preregistered variant exercises replace_text on the same real-source patch/check, using the original seven alternating pairs and <=10% overhead criterion. Baseline median0.184782291s; exact-fragment candidate0.219495708s: **+18.79% overhead**, identical output, modeled controls9->4. The gate **fails** and is retained; no speed promotion or threshold relaxation. The earlier3.59% whole-view/Git-read result applies to that earlier benchmark, not this exact path. Correct live execution and a passing regression suite do not erase this performance finding.
+
+Conclusion: observed editing capability and autonomous lifecycle gates pass. Task-resolution and native timing gates do not. Keep the candidate experimental. Source manifests, actual events/patches, JUnit, official grading log, benchmark rows and cleanup receipts remain local.
